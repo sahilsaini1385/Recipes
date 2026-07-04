@@ -87,7 +87,20 @@ export default function AddRecipe() {
     const { data, error } = await supabase.functions.invoke("parse-recipe", {
       body,
     });
-    if (error) throw new Error(error.message || "Import failed");
+    if (error) {
+      // Surface the real reason from the function's JSON body when present.
+      let detail = error.message || "Import failed";
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === "function") {
+        try {
+          const payload = await ctx.json();
+          if (payload?.error) detail = payload.error;
+        } catch {
+          // body wasn't JSON — keep the generic message
+        }
+      }
+      throw new Error(detail);
+    }
     const draft = data as RecipeDraft;
     // The parser returns an empty title when the input isn't a recipe.
     if (!draft.title && !draft.ingredients?.length) return null;
@@ -149,11 +162,22 @@ export default function AddRecipe() {
           } collapsed (kept the most complete version).`
         );
       }
-      if (deduped.length === 0) {
-        throw new Error("Nothing importable was found.");
-      }
-
+      // Show the per-file outcomes even when nothing succeeded, so the real
+      // failure reason is visible instead of a generic message.
       setImportWarnings(warnings);
+      if (deduped.length === 0) {
+        const firstFailure = failed[0] ?? "";
+        if (/Failed to send a request|Failed to fetch|not found/i.test(firstFailure)) {
+          throw new Error(
+            "The recipe parser isn't reachable. The 'parse-recipe' Edge Function may not be deployed in Supabase yet — see the README setup step, then try again."
+          );
+        }
+        throw new Error(
+          firstFailure
+            ? `Nothing could be imported. First problem: ${firstFailure}`
+            : "Nothing importable was found."
+        );
+      }
       setQueue(deduped);
       setQueueIndex(0);
       setSavedCount(0);
