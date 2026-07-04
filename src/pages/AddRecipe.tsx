@@ -11,15 +11,24 @@ import {
   type RecipeFormValue,
 } from "@/components/RecipeForm";
 import { useAuth } from "@/hooks/useAuth";
+import { useRecipes } from "@/hooks/useRecipes";
 import { supabase } from "@/lib/supabase";
 import { createRecipe } from "@/lib/saveRecipe";
+import { extractFromFile, type ExtractedEntry } from "@/lib/extractDocs";
+import { dedupeDrafts, normalizeTitle } from "@/lib/dedupe";
 import { cn } from "@/lib/utils";
 import type { RecipeDraft } from "@/lib/types";
 
 type Mode = "form" | "import";
 
+interface QueueItem {
+  sourceName: string;
+  draft: RecipeDraft;
+}
+
 export default function AddRecipe() {
   const { session, isFamily, loading } = useAuth();
+  const { recipes } = useRecipes();
   const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>("form");
   const [form, setForm] = useState<RecipeFormValue>(() =>
@@ -29,13 +38,20 @@ export default function AddRecipe() {
       ],
     })
   );
-  const [reviewing, setReviewing] = useState(false);
 
-  // Smart import state
+  // Review queue: single-recipe imports are a queue of one; zip imports can
+  // hold dozens. Each is reviewed and saved (or skipped) one at a time.
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [savedCount, setSavedCount] = useState(0);
+  const reviewing = queue.length > 0;
+
   const [pasteText, setPasteText] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -64,34 +80,102 @@ export default function AddRecipe() {
     );
   }
 
+  const parseEntry = async (
+    entry: ExtractedEntry
+  ): Promise<RecipeDraft | null> => {
+    const body = entry.file ? { file: entry.file } : { text: entry.text };
+    const { data, error } = await supabase.functions.invoke("parse-recipe", {
+      body,
+    });
+    if (error) throw new Error(error.message || "Import failed");
+    const draft = data as RecipeDraft;
+    // The parser returns an empty title when the input isn't a recipe.
+    if (!draft.title && !draft.ingredients?.length) return null;
+    return draft;
+  };
+
   const runImport = async () => {
     setImporting(true);
     setImportError(null);
+    setImportWarnings([]);
     try {
-      let body: Record<string, unknown>;
+      let entries: ExtractedEntry[] = [];
+      const warnings: string[] = [];
+
       if (importFile) {
-        const data = await fileToBase64(importFile);
-        body = { file: { data, media_type: importFile.type } };
+        setProgress(`Reading ${importFile.name}…`);
+        const extracted = await extractFromFile(importFile);
+        entries = extracted.entries;
+        if (extracted.skipped.length) {
+          warnings.push(
+            `Could not read: ${extracted.skipped.join(", ")}`
+          );
+        }
+        if (entries.length === 0) {
+          throw new Error(
+            "No readable recipes found in that file. Supported: photos, PDF, .docx, .doc, .txt, or a .zip of those."
+          );
+        }
       } else if (pasteText.trim()) {
-        body = { text: pasteText.trim() };
+        entries = [{ name: "pasted text", text: pasteText.trim() }];
       } else {
-        setImportError("Paste recipe text or choose a photo or PDF first.");
-        setImporting(false);
-        return;
+        throw new Error("Paste recipe text or choose a file first.");
       }
 
-      const { data, error } = await supabase.functions.invoke("parse-recipe", {
-        body,
-      });
-      if (error) throw new Error(error.message || "Import failed");
-      const draft = data as Partial<RecipeDraft>;
-      setForm(draftToForm(draft));
-      setReviewing(true);
+      const items: QueueItem[] = [];
+      const failed: string[] = [];
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        setProgress(
+          entries.length > 1
+            ? `Parsing ${entry.name} (${i + 1} of ${entries.length})…`
+            : "Reading recipe…"
+        );
+        try {
+          const draft = await parseEntry(entry);
+          if (draft) items.push({ sourceName: entry.name, draft });
+          else failed.push(`${entry.name} (not a recipe)`);
+        } catch (e) {
+          failed.push(`${entry.name} (${(e as Error).message})`);
+        }
+      }
+      if (failed.length) warnings.push(`Skipped: ${failed.join("; ")}`);
+
+      const deduped = dedupeDrafts(items);
+      if (deduped.length < items.length) {
+        warnings.push(
+          `${items.length - deduped.length} duplicate${
+            items.length - deduped.length === 1 ? "" : "s"
+          } collapsed (kept the most complete version).`
+        );
+      }
+      if (deduped.length === 0) {
+        throw new Error("Nothing importable was found.");
+      }
+
+      setImportWarnings(warnings);
+      setQueue(deduped);
+      setQueueIndex(0);
+      setSavedCount(0);
+      setForm(draftToForm(deduped[0].draft));
       window.scrollTo({ top: 0 });
     } catch (e) {
       setImportError((e as Error).message);
     } finally {
       setImporting(false);
+      setProgress("");
+    }
+  };
+
+  const advanceQueue = () => {
+    const next = queueIndex + 1;
+    if (next < queue.length) {
+      setQueueIndex(next);
+      setForm(draftToForm(queue[next].draft));
+      window.scrollTo({ top: 0 });
+    } else {
+      setQueue([]);
+      navigate("/");
     }
   };
 
@@ -102,7 +186,13 @@ export default function AddRecipe() {
       const draft = formToDraft(form);
       if (!draft.title) throw new Error("A title is required.");
       const slug = await createRecipe(draft, photoFile);
-      navigate(`/recipe/${slug}`);
+      if (reviewing && queue.length > 1) {
+        setSavedCount((n) => n + 1);
+        advanceQueue();
+      } else {
+        setQueue([]);
+        navigate(`/recipe/${slug}`);
+      }
     } catch (e) {
       setSaveError((e as Error).message);
     } finally {
@@ -110,17 +200,53 @@ export default function AddRecipe() {
     }
   };
 
+  const current = reviewing ? queue[queueIndex] : null;
+  const alreadyExists =
+    current &&
+    recipes?.some(
+      (r) => normalizeTitle(r.title) === normalizeTitle(current.draft.title)
+    );
+
   return (
     <main className="mx-auto max-w-2xl px-4 pb-16 pt-4">
       <h1 className="mb-4 text-2xl">
-        {reviewing ? "Review imported recipe" : "Add recipe"}
+        {reviewing
+          ? queue.length > 1
+            ? `Review recipe ${queueIndex + 1} of ${queue.length}`
+            : "Review imported recipe"
+          : "Add recipe"}
       </h1>
 
       {reviewing && (
-        <p className="mb-4 rounded-lg bg-accent-soft p-3 text-sm text-accent-dark">
-          Check the parsed ingredients and steps below, fix anything that looks
-          wrong, then save.
-        </p>
+        <div className="mb-4 space-y-2">
+          <p className="rounded-lg bg-accent-soft p-3 text-sm text-accent-dark">
+            {queue.length > 1 ? (
+              <>
+                From <strong>{current?.sourceName}</strong>. Check the parsed
+                result, fix anything wrong, then save — or skip this one.
+                {savedCount > 0 && ` Saved so far: ${savedCount}.`}
+              </>
+            ) : (
+              "Check the parsed ingredients and steps below, fix anything that looks wrong, then save."
+            )}
+          </p>
+          {alreadyExists && (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              A recipe with this title already exists — saving will create a
+              second copy. Skip if it's the same one.
+            </p>
+          )}
+          {importWarnings.map((w, i) => (
+            <p key={i} className="rounded-lg bg-paper-warm p-3 text-xs text-ink-soft">
+              {w}
+            </p>
+          ))}
+          {queue.length > 1 && (
+            <Button variant="outline" size="sm" onClick={advanceQueue}>
+              Skip this recipe
+            </Button>
+          )}
+        </div>
       )}
 
       {!reviewing && (
@@ -154,26 +280,38 @@ export default function AddRecipe() {
           </div>
           <div className="text-center text-sm text-ink-faint">or</div>
           <div>
-            <Label htmlFor="import-file">Upload a photo or PDF</Label>
+            <Label htmlFor="import-file">
+              Upload a photo, PDF, Word file, or a whole .zip of recipes
+            </Label>
             <input
               id="import-file"
               type="file"
-              accept="image/*,application/pdf"
+              accept="image/*,application/pdf,.pdf,.doc,.docx,.txt,.rtf,.md,.zip"
               onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
               className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-paper-deep file:px-3 file:py-2 file:text-ink"
             />
+            <p className="mt-1 text-xs text-ink-faint">
+              A .zip is unpacked automatically: every recipe inside is parsed,
+              duplicates are collapsed, and you review each one before it is
+              saved.
+            </p>
           </div>
           {importError && <p className="text-sm text-red-700">{importError}</p>}
+          {importWarnings.map((w, i) => (
+            <p key={i} className="rounded-lg bg-paper-warm p-3 text-xs text-ink-soft">
+              {w}
+            </p>
+          ))}
           <Button
             size="lg"
             className="w-full"
             onClick={runImport}
             disabled={importing}
           >
-            {importing ? "Reading recipe…" : "Import"}
+            {importing ? progress || "Reading recipe…" : "Import"}
           </Button>
           <p className="text-center text-xs text-ink-faint">
-            The recipe is parsed automatically. You review and edit the result
+            Recipes are parsed automatically. You review and edit each result
             before anything is saved.
           </p>
         </div>
@@ -182,7 +320,13 @@ export default function AddRecipe() {
           value={form}
           onChange={setForm}
           onSubmit={save}
-          submitLabel="Save recipe"
+          submitLabel={
+            reviewing && queue.length > 1
+              ? queueIndex + 1 < queue.length
+                ? "Save and review next"
+                : "Save last recipe"
+              : "Save recipe"
+          }
           saving={saving}
           error={saveError}
         />
@@ -216,16 +360,4 @@ function TabButton({
       {label}
     </button>
   );
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve(result.split(",")[1]);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }

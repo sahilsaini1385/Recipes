@@ -3,7 +3,8 @@
 A mobile-first family recipe website. Browse and search recipes, rescale any
 recipe's ingredient amounts to a chosen number of servings, and let family
 members add new recipes — by structured form, by pasting text, or by
-uploading a photo/PDF that gets parsed automatically.
+uploading a photo, PDF, Word file, or a whole .zip of recipe documents that
+get parsed automatically (with duplicate collapsing and per-recipe review).
 
 **Stack:** React + Vite + Tailwind (shadcn-style components) · Supabase
 (Postgres, Storage, magic-link auth, Edge Functions) · Anthropic API for smart
@@ -78,14 +79,12 @@ The seed is idempotent and de-duplicates by normalized title ("Copy of X",
 keeping the most complete version). Entries with no ingredients and no steps
 are skipped as non-recipes. Re-running never creates duplicates.
 
-Don't have a `recipes.json` yet? Two options:
-
-- Use the **Import** tab in the app — paste text or upload a photo/PDF of
-  each recipe; the parser produces the exact schema and you review before
-  saving.
-- Or convert your document collection to `recipes.json` in one shot: give the
-  files to Claude (or any LLM) with the ingredient schema from
-  `src/lib/types.ts` and ask for a JSON array, then run the seed script.
+Don't have a `recipes.json`? The easier path is the app's **Import** tab: it
+accepts pasted text, photos, PDFs, .docx/.doc/.txt files — or a whole **.zip**
+of the family collection. Zips are unpacked in the browser, every document is
+parsed, "Copy of X" / "(1)" / .doc-vs-.docx duplicates are collapsed keeping
+the most complete version, and you review each recipe before it saves.
+(Requires the parse-recipe edge function from step 2.)
 
 ---
 
