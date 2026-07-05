@@ -15,6 +15,11 @@ import { useRecipes } from "@/hooks/useRecipes";
 import { supabase } from "@/lib/supabase";
 import { createRecipe } from "@/lib/saveRecipe";
 import { extractFromFile, type ExtractedEntry } from "@/lib/extractDocs";
+import {
+  listNewDriveFiles,
+  fetchDriveEntry,
+  markDriveFile,
+} from "@/lib/driveSync";
 import { dedupeDrafts, normalizeTitle } from "@/lib/dedupe";
 import { cn } from "@/lib/utils";
 import type { RecipeDraft } from "@/lib/types";
@@ -24,6 +29,8 @@ type Mode = "form" | "import";
 interface QueueItem {
   sourceName: string;
   draft: RecipeDraft;
+  /** Set when this item came from Google Drive, to log the outcome. */
+  driveFileId?: string;
 }
 
 export default function AddRecipe() {
@@ -137,6 +144,22 @@ export default function AddRecipe() {
         throw new Error("Paste recipe text or choose a file first.");
       }
 
+      await parseAndQueue(entries, warnings);
+    } catch (e) {
+      setImportError((e as Error).message);
+    } finally {
+      setImporting(false);
+      setProgress("");
+    }
+  };
+
+  /** Parse extracted entries, dedupe, and open the review queue. */
+  const parseAndQueue = async (
+    entries: Array<ExtractedEntry & { driveFileId?: string }>,
+    warnings: string[]
+  ) => {
+    {
+      // (kept as a block to preserve the original queue-building flow)
       const items: QueueItem[] = [];
       const failed: string[] = [];
       for (let i = 0; i < entries.length; i++) {
@@ -148,8 +171,13 @@ export default function AddRecipe() {
         );
         try {
           const draft = await parseEntry(entry);
-          if (draft) items.push({ sourceName: entry.name, draft });
-          else failed.push(`${entry.name} (not a recipe)`);
+          if (draft) {
+            items.push({
+              sourceName: entry.name,
+              draft,
+              driveFileId: entry.driveFileId,
+            });
+          } else failed.push(`${entry.name} (not a recipe)`);
         } catch (e) {
           failed.push(`${entry.name} (${(e as Error).message})`);
         }
@@ -157,6 +185,14 @@ export default function AddRecipe() {
       if (failed.length) warnings.push(`Skipped: ${failed.join("; ")}`);
 
       const deduped = dedupeDrafts(items);
+      // Drive files whose drafts were collapsed as duplicates still need to
+      // be logged, or they would be offered again on every sync.
+      const kept = new Set(deduped.map((i) => i));
+      for (const item of items) {
+        if (!kept.has(item) && item.driveFileId) {
+          await markDriveFile(item.driveFileId, item.sourceName, "skipped");
+        }
+      }
       if (deduped.length < items.length) {
         warnings.push(
           `${items.length - deduped.length} duplicate${
@@ -185,6 +221,45 @@ export default function AddRecipe() {
       setSavedCount(0);
       setForm(draftToForm(deduped[0].draft));
       window.scrollTo({ top: 0 });
+    }
+  };
+
+  /** Check the shared Google Drive folder for files not yet imported. */
+  const runDriveSync = async () => {
+    setImporting(true);
+    setImportError(null);
+    setImportWarnings([]);
+    try {
+      setProgress("Checking Google Drive…");
+      const newFiles = await listNewDriveFiles();
+      if (newFiles.length === 0) {
+        setImportWarnings(["No new files in the Drive folder."]);
+        return;
+      }
+      const warnings: string[] = [];
+      const entries: Array<ExtractedEntry & { driveFileId?: string }> = [];
+      const unreadable: string[] = [];
+      for (let i = 0; i < newFiles.length; i++) {
+        const f = newFiles[i];
+        setProgress(`Downloading ${f.name} (${i + 1} of ${newFiles.length})…`);
+        try {
+          const entry = await fetchDriveEntry(f);
+          if (entry) entries.push({ ...entry, driveFileId: f.id });
+          else unreadable.push(f.name);
+        } catch (e) {
+          unreadable.push(`${f.name} (${(e as Error).message})`);
+        }
+      }
+      if (unreadable.length) {
+        warnings.push(`Could not read: ${unreadable.join("; ")}`);
+      }
+      if (entries.length === 0) {
+        setImportWarnings(warnings);
+        throw new Error(
+          "Found new files in Drive, but none could be read as recipes."
+        );
+      }
+      await parseAndQueue(entries, warnings);
     } catch (e) {
       setImportError((e as Error).message);
     } finally {
@@ -205,6 +280,14 @@ export default function AddRecipe() {
     }
   };
 
+  const skipCurrent = async () => {
+    const item = queue[queueIndex];
+    if (item?.driveFileId) {
+      await markDriveFile(item.driveFileId, item.sourceName, "skipped");
+    }
+    advanceQueue();
+  };
+
   const save = async (photoFile: File | null) => {
     setSaving(true);
     setSaveError(null);
@@ -212,6 +295,10 @@ export default function AddRecipe() {
       const draft = formToDraft(form);
       if (!draft.title) throw new Error("A title is required.");
       const slug = await createRecipe(draft, photoFile);
+      const item = queue[queueIndex];
+      if (item?.driveFileId) {
+        await markDriveFile(item.driveFileId, item.sourceName, "imported");
+      }
       if (reviewing && queue.length > 1) {
         setSavedCount((n) => n + 1);
         advanceQueue();
@@ -268,7 +355,7 @@ export default function AddRecipe() {
             </p>
           ))}
           {queue.length > 1 && (
-            <Button variant="outline" size="sm" onClick={advanceQueue}>
+            <Button variant="outline" size="sm" onClick={skipCurrent}>
               Skip this recipe
             </Button>
           )}
@@ -342,6 +429,22 @@ export default function AddRecipe() {
           >
             {importing ? progress || "Reading recipe…" : "Import"}
           </Button>
+          <div className="text-center text-sm text-ink-faint">or</div>
+          <Button
+            variant="secondary"
+            size="lg"
+            className="w-full"
+            onClick={runDriveSync}
+            disabled={importing}
+          >
+            {importing
+              ? progress || "Checking Google Drive…"
+              : "Check Google Drive for new recipes"}
+          </Button>
+          <p className="text-center text-xs text-ink-faint">
+            Looks in the family's shared Drive folder and imports anything
+            added since the last check.
+          </p>
           <p className="text-center text-xs text-ink-faint">
             Recipes are parsed automatically. You review and edit each result
             before anything is saved.

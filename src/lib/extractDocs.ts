@@ -85,7 +85,7 @@ function bufToBase64(buf: ArrayBuffer): string {
 }
 
 /** Turn one file (by name + bytes) into an importable entry, or null. */
-async function entryFromBytes(
+export async function entryFromBytes(
   name: string,
   buf: ArrayBuffer
 ): Promise<ExtractedEntry | null> {
