@@ -106,28 +106,63 @@ Deno.serve(async (req) => {
 
   try {
     if (payload.action === "list") {
-      const files: Array<{ id: string; name: string; mimeType: string }> = [];
-      let pageToken = "";
-      do {
-        const params = new URLSearchParams({
-          q: `'${folder.id}' in parents and trashed=false`,
-          fields: "nextPageToken,files(id,name,mimeType,resourceKey)",
-          pageSize: "200",
-          key: apiKey,
-        });
-        if (pageToken) params.set("pageToken", pageToken);
-        const res = await fetch(
-          `https://www.googleapis.com/drive/v3/files?${params}`,
-          { headers: resourceKeyHeaders([[folder.id, folder.resourceKey]]) }
-        );
-        if (!res.ok) {
-          const detail = await res.text();
-          throw new Error(`Drive list failed (${res.status}): ${detail}`);
-        }
-        const data = await res.json();
-        files.push(...(data.files ?? []));
-        pageToken = data.nextPageToken ?? "";
-      } while (pageToken);
+      // Walk the folder tree: subfolders are traversed (capped for safety)
+      // and each file remembers which subfolder it came from — the site uses
+      // that as a category hint.
+      const files: Array<{
+        id: string;
+        name: string;
+        mimeType: string;
+        resourceKey?: string;
+        folder: string;
+      }> = [];
+      const queue: Array<{ id: string; key: string; path: string }> = [
+        { id: folder.id, key: folder.resourceKey, path: "" },
+      ];
+      const visited = new Set<string>();
+
+      while (queue.length > 0 && visited.size < 100) {
+        const current = queue.shift()!;
+        if (visited.has(current.id)) continue;
+        visited.add(current.id);
+
+        let pageToken = "";
+        do {
+          const params = new URLSearchParams({
+            q: `'${current.id}' in parents and trashed=false`,
+            fields: "nextPageToken,files(id,name,mimeType,resourceKey)",
+            pageSize: "200",
+            key: apiKey,
+          });
+          if (pageToken) params.set("pageToken", pageToken);
+          const res = await fetch(
+            `https://www.googleapis.com/drive/v3/files?${params}`,
+            {
+              headers: resourceKeyHeaders([
+                [folder.id, folder.resourceKey],
+                [current.id, current.key],
+              ]),
+            }
+          );
+          if (!res.ok) {
+            const detail = await res.text();
+            throw new Error(`Drive list failed (${res.status}): ${detail}`);
+          }
+          const data = await res.json();
+          for (const f of data.files ?? []) {
+            if (f.mimeType === "application/vnd.google-apps.folder") {
+              queue.push({
+                id: f.id,
+                key: f.resourceKey ?? "",
+                path: current.path ? `${current.path}/${f.name}` : f.name,
+              });
+            } else {
+              files.push({ ...f, folder: current.path });
+            }
+          }
+          pageToken = data.nextPageToken ?? "";
+        } while (pageToken);
+      }
       return json({ files });
     }
 

@@ -7,6 +7,8 @@ export interface DriveFile {
   mimeType: string;
   /** Present on files in legacy Drive folders; required to download them. */
   resourceKey?: string;
+  /** Subfolder path within the shared folder, e.g. "Dessert". */
+  folder?: string;
 }
 
 async function invokeDriveSync(body: Record<string, unknown>) {
@@ -59,15 +61,21 @@ export async function fetchDriveEntry(
     mimeType: file.mimeType,
     resourceKey: file.resourceKey,
   });
+  let entry: ExtractedEntry | null = null;
   if (typeof data.text === "string") {
-    return data.text.trim().length > 20
-      ? { name: file.name, text: data.text }
-      : null;
+    entry =
+      data.text.trim().length > 20 ? { name: file.name, text: data.text } : null;
+  } else if (typeof data.data === "string") {
+    entry = await entryFromBytes(file.name, base64ToArrayBuffer(data.data));
   }
-  if (typeof data.data === "string") {
-    return entryFromBytes(file.name, base64ToArrayBuffer(data.data));
+  // The Drive subfolder name doubles as a category hint for the parser.
+  if (entry?.text && file.folder) {
+    entry = {
+      ...entry,
+      text: `(This recipe was filed in the folder: ${file.folder})\n\n${entry.text}`,
+    };
   }
-  return null;
+  return entry;
 }
 
 /** Remember the outcome so this file is not offered again next sync. */
