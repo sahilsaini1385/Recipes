@@ -5,11 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ServingsControl } from "@/components/ServingsControl";
 import { IngredientList } from "@/components/IngredientList";
+import { UnitToggle } from "@/components/UnitToggle";
 import { CookMode } from "@/pages/CookMode";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useAuth } from "@/hooks/useAuth";
+import { useUnitSystem } from "@/hooks/useUnitSystem";
 import { photoUrl } from "@/lib/supabase";
 import { scaleFactor } from "@/lib/scaling";
+import { convertTemperatures } from "@/lib/units";
 
 export default function RecipePage() {
   const { slug } = useParams();
@@ -24,6 +27,7 @@ export default function RecipePage() {
   // Chosen servings live only in component state — never written to the DB.
   const [servings, setServings] = useState<number | null>(null);
   const [cooking, setCooking] = useState(false);
+  const [units, setUnits] = useUnitSystem();
 
   if (loading) {
     return <p className="mt-10 text-center text-ink-soft">Loading…</p>;
@@ -46,6 +50,8 @@ export default function RecipePage() {
         recipe={recipe}
         factor={factor}
         servings={currentServings}
+        units={units}
+        onChangeUnits={setUnits}
         onExit={() => setCooking(false)}
       />
     );
@@ -105,8 +111,15 @@ export default function RecipePage() {
       </div>
 
       <section className="mt-6">
-        <h2 className="mb-3 text-xl">Ingredients</h2>
-        <IngredientList ingredients={recipe.ingredients} factor={factor} />
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xl">Ingredients</h2>
+          <UnitToggle value={units} onChange={setUnits} />
+        </div>
+        <IngredientList
+          ingredients={recipe.ingredients}
+          factor={factor}
+          units={units}
+        />
       </section>
 
       <section className="mt-6">
@@ -117,7 +130,9 @@ export default function RecipePage() {
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft font-serif text-sm font-semibold text-accent-dark">
                 {i + 1}
               </span>
-              <p className="leading-relaxed">{step}</p>
+              <p className="leading-relaxed">
+                {units === "metric" ? convertTemperatures(step) : step}
+              </p>
             </li>
           ))}
         </ol>
@@ -127,7 +142,7 @@ export default function RecipePage() {
         <section className="mt-6 rounded-xl bg-paper-warm p-4">
           <h2 className="mb-1 text-lg">Notes</h2>
           <p className="whitespace-pre-wrap leading-relaxed text-ink-soft">
-            {recipe.notes}
+            {units === "metric" ? convertTemperatures(recipe.notes) : recipe.notes}
           </p>
         </section>
       )}

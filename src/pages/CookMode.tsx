@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { IngredientLine } from "@/components/IngredientList";
+import { UnitToggle } from "@/components/UnitToggle";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import { convertTemperatures, type UnitSystem } from "@/lib/units";
 import { cn } from "@/lib/utils";
 import type { Recipe } from "@/lib/types";
 
@@ -9,6 +11,8 @@ interface Props {
   recipe: Recipe;
   factor: number;
   servings: number;
+  units: UnitSystem;
+  onChangeUnits: (u: UnitSystem) => void;
   onExit: () => void;
 }
 
@@ -16,7 +20,14 @@ interface Props {
  * Full-screen cooking view: large text, checkable ingredients and steps, and
  * a screen wake lock so the phone does not sleep mid-recipe.
  */
-export function CookMode({ recipe, factor, servings, onExit }: Props) {
+export function CookMode({
+  recipe,
+  factor,
+  servings,
+  units,
+  onChangeUnits,
+  onExit,
+}: Props) {
   useWakeLock(true);
   const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(
     new Set()
@@ -42,13 +53,16 @@ export function CookMode({ recipe, factor, servings, onExit }: Props) {
           </h1>
           <p className="text-sm text-ink-soft">{servings} servings</p>
         </div>
-        <button
-          onClick={onExit}
-          aria-label="Exit cook mode"
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-paper-warm"
-        >
-          <X className="h-6 w-6" />
-        </button>
+        <div className="flex items-center gap-2">
+          <UnitToggle value={units} onChange={onChangeUnits} />
+          <button
+            onClick={onExit}
+            aria-label="Exit cook mode"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-paper-warm"
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
       </div>
 
       <div className="mx-auto max-w-2xl px-4 pb-24 pt-4">
@@ -75,7 +89,11 @@ export function CookMode({ recipe, factor, servings, onExit }: Props) {
                     checkedIngredients.has(i) && "text-ink-faint line-through"
                   )}
                 >
-                  <IngredientLine ingredient={ing} factor={factor} />
+                  <IngredientLine
+                    ingredient={ing}
+                    factor={factor}
+                    units={units}
+                  />
                 </span>
               </button>
             </li>
@@ -105,7 +123,7 @@ export function CookMode({ recipe, factor, servings, onExit }: Props) {
                     checkedSteps.has(i) && "text-ink-faint line-through"
                   )}
                 >
-                  {step}
+                  {units === "metric" ? convertTemperatures(step) : step}
                 </span>
               </button>
             </li>

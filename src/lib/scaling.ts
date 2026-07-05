@@ -155,6 +155,9 @@ export interface ScaledLine {
   scaled: boolean;
   /** Formatted quantity text (with range if present), or null. */
   quantityText: string | null;
+  /** Scaled numeric value(s), for unit conversion downstream. */
+  scaledLow: number | null;
+  scaledHigh: number | null;
   /** True when rounding moved the displayed value ("approx" in the UI). */
   approx: boolean;
   /** Show "adjust to taste when scaling" for fixed lines when factor != 1. */
@@ -173,6 +176,8 @@ export function scaleIngredient(ing: Ingredient, factor: number): ScaledLine {
       ingredient: ing,
       scaled: false,
       quantityText: null,
+      scaledLow: null,
+      scaledHigh: null,
       approx: false,
       showHint: Math.abs(factor - 1) > 1e-9,
     };
@@ -181,7 +186,7 @@ export function scaleIngredient(ing: Ingredient, factor: number): ScaledLine {
   const countable = isCountable(ing);
   let approx = false;
 
-  const scaleOne = (q: number): FormattedQuantity => {
+  const scaleOne = (q: number): { num: number; formatted: FormattedQuantity } => {
     let scaled = q * factor;
     if (countable) {
       const rounded = roundToHalf(scaled);
@@ -190,20 +195,24 @@ export function scaleIngredient(ing: Ingredient, factor: number): ScaledLine {
     }
     const formatted = formatQuantity(scaled);
     if (formatted.approx) approx = true;
-    return formatted;
+    return { num: scaled, formatted };
   };
 
   const low = scaleOne(ing.quantity as number);
-  let text = low.text;
+  let text = low.formatted.text;
+  let scaledHigh: number | null = null;
   if (ing.quantity_max != null && isFinite(ing.quantity_max)) {
     const high = scaleOne(ing.quantity_max);
-    text = `${low.text}–${high.text}`;
+    text = `${low.formatted.text}–${high.formatted.text}`;
+    scaledHigh = high.num;
   }
 
   return {
     ingredient: ing,
     scaled: Math.abs(factor - 1) > 1e-9,
     quantityText: text,
+    scaledLow: low.num,
+    scaledHigh,
     approx,
     showHint: false,
   };
