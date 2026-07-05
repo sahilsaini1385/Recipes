@@ -14,10 +14,12 @@ create table if not exists public.allowed_emails (
 );
 alter table public.allowed_emails enable row level security;
 
--- Seed the first family member. Add more with:
+-- Seed the family members. Add more with:
 --   insert into allowed_emails (email) values ('name@example.com');
 insert into public.allowed_emails (email)
-values ('ss3694@cornell.edu')
+values
+  ('ss3694@cornell.edu'),
+  ('kathrynjsaini@gmail.com')
 on conflict (email) do nothing;
 
 create or replace function public.is_family()
