@@ -60,7 +60,9 @@ export async function updateRecipe(
 
   const { error } = await supabase
     .from("recipes")
-    .update({ ...draft, slug, photo_path })
+    // Editing may change ingredients, so clear the cost estimate — the
+    // background estimator will re-price it on the next visit.
+    .update({ ...draft, slug, photo_path, cost_per_serving: null })
     .eq("id", id);
   if (error) throw error;
 

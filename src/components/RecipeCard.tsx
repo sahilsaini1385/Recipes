@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { formatCostPerServing } from "@/lib/cost";
 import { photoUrl } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import type { Recipe } from "@/lib/types";
@@ -35,6 +36,11 @@ export function RecipeCard({ recipe, isFavorite, onToggleFavorite }: Props) {
           )}
           <div className="mt-2 flex flex-wrap gap-1">
             <Badge>{recipe.category}</Badge>
+            {formatCostPerServing(recipe.cost_per_serving) && (
+              <Badge variant="outline">
+                {formatCostPerServing(recipe.cost_per_serving)}
+              </Badge>
+            )}
             {recipe.tags.slice(0, 3).map((t) => (
               <Badge key={t} variant="secondary">
                 {t}

@@ -27,6 +27,8 @@ export interface Recipe {
   tags: string[];
   notes: string | null;
   photo_path: string | null;
+  /** Rough AI-estimated USD cost per serving; null until estimated. */
+  cost_per_serving: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -34,5 +36,5 @@ export interface Recipe {
 
 export type RecipeDraft = Omit<
   Recipe,
-  "id" | "slug" | "created_by" | "created_at" | "updated_at"
+  "id" | "slug" | "cost_per_serving" | "created_by" | "created_at" | "updated_at"
 >;

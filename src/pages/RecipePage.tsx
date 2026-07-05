@@ -13,6 +13,7 @@ import { useUnitSystem } from "@/hooks/useUnitSystem";
 import { photoUrl } from "@/lib/supabase";
 import { scaleFactor } from "@/lib/scaling";
 import { convertTemperatures } from "@/lib/units";
+import { formatCostPerServing } from "@/lib/cost";
 
 export default function RecipePage() {
   const { slug } = useParams();
@@ -84,6 +85,11 @@ export default function RecipePage() {
 
       <div className="mt-2 flex flex-wrap gap-1.5">
         <Badge>{recipe.category}</Badge>
+        {formatCostPerServing(recipe.cost_per_serving) && (
+          <Badge variant="outline" title="Rough estimate at US grocery prices">
+            {formatCostPerServing(recipe.cost_per_serving)} est.
+          </Badge>
+        )}
         {recipe.tags.map((t) => (
           <Badge key={t} variant="secondary">
             {t}

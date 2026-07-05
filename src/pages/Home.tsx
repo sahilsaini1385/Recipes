@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { RecipeCard } from "@/components/RecipeCard";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useCostEstimates } from "@/hooks/useCostEstimates";
 import { CATEGORIES } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 import type { Recipe } from "@/lib/types";
@@ -22,6 +23,7 @@ function matchesQuery(recipe: Recipe, q: string): boolean {
 export default function Home() {
   const { recipes, loading, error, reload } = useRecipes();
   const { favorites, toggle } = useFavorites();
+  useCostEstimates(); // quietly backfills missing cost estimates
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [tag, setTag] = useState<string | null>(null);
