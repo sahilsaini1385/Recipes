@@ -47,7 +47,7 @@ export default function AddRecipe() {
   const reviewing = queue.length > 0;
 
   const [pasteText, setPasteText] = useState("");
-  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importFiles, setImportFiles] = useState<File[]>([]);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
@@ -115,18 +115,20 @@ export default function AddRecipe() {
       let entries: ExtractedEntry[] = [];
       const warnings: string[] = [];
 
-      if (importFile) {
-        setProgress(`Reading ${importFile.name}…`);
-        const extracted = await extractFromFile(importFile);
-        entries = extracted.entries;
-        if (extracted.skipped.length) {
-          warnings.push(
-            `Could not read: ${extracted.skipped.join(", ")}`
-          );
+      if (importFiles.length > 0) {
+        const unreadable: string[] = [];
+        for (const file of importFiles) {
+          setProgress(`Reading ${file.name}…`);
+          const extracted = await extractFromFile(file);
+          entries.push(...extracted.entries);
+          unreadable.push(...extracted.skipped);
+        }
+        if (unreadable.length) {
+          warnings.push(`Could not read: ${unreadable.join(", ")}`);
         }
         if (entries.length === 0) {
           throw new Error(
-            "No readable recipes found in that file. Supported: photos, PDF, .docx, .doc, .txt, or a .zip of those."
+            "No readable recipes found in those files. Supported: photos, PDF, .docx, .doc, .txt, or a .zip of those."
           );
         }
       } else if (pasteText.trim()) {
@@ -305,19 +307,25 @@ export default function AddRecipe() {
           <div className="text-center text-sm text-ink-faint">or</div>
           <div>
             <Label htmlFor="import-file">
-              Upload a photo, PDF, Word file, or a whole .zip of recipes
+              Upload photos, PDFs, Word files, or a whole .zip of recipes
             </Label>
             <input
               id="import-file"
               type="file"
+              multiple
               accept="image/*,application/pdf,.pdf,.doc,.docx,.txt,.rtf,.md,.zip"
-              onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => setImportFiles(Array.from(e.target.files ?? []))}
               className="block w-full text-sm text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-paper-deep file:px-3 file:py-2 file:text-ink"
             />
+            {importFiles.length > 1 && (
+              <p className="mt-1 text-xs text-ink-soft">
+                {importFiles.length} files selected
+              </p>
+            )}
             <p className="mt-1 text-xs text-ink-faint">
-              A .zip is unpacked automatically: every recipe inside is parsed,
-              duplicates are collapsed, and you review each one before it is
-              saved.
+              Select as many files as you like. Zips are unpacked
+              automatically, every recipe is parsed, duplicates are collapsed,
+              and you review each one before it is saved.
             </p>
           </div>
           {importError && <p className="text-sm text-red-700">{importError}</p>}
