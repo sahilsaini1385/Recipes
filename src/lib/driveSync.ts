@@ -5,6 +5,8 @@ export interface DriveFile {
   id: string;
   name: string;
   mimeType: string;
+  /** Present on files in legacy Drive folders; required to download them. */
+  resourceKey?: string;
 }
 
 async function invokeDriveSync(body: Record<string, unknown>) {
@@ -55,6 +57,7 @@ export async function fetchDriveEntry(
     action: "fetch",
     id: file.id,
     mimeType: file.mimeType,
+    resourceKey: file.resourceKey,
   });
   if (typeof data.text === "string") {
     return data.text.trim().length > 20
