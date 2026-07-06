@@ -19,7 +19,10 @@ alter table public.allowed_emails enable row level security;
 insert into public.allowed_emails (email)
 values
   ('ss3694@cornell.edu'),
-  ('kathrynjsaini@gmail.com')
+  ('kathrynjsaini@gmail.com'),
+  ('johnjungman@gmail.com'),
+  ('wrjungman@gmail.com'),
+  ('rickiejungman@gmail.com')
 on conflict (email) do nothing;
 
 create or replace function public.is_family()
