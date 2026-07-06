@@ -20,9 +20,9 @@ export function useCostEstimates() {
     let cancelled = false;
 
     (async () => {
-      // Cap the batches per visit so a huge backlog can't run up the API
-      // bill in one sitting; the next visit continues where this left off.
-      for (let i = 0; i < 12 && !cancelled; i++) {
+      // Bounded loop so a failure can't spin forever; 60 batches × 8 covers
+      // even a large collection in one signed-in visit.
+      for (let i = 0; i < 60 && !cancelled; i++) {
         try {
           const { data, error } = await supabase.functions.invoke(
             "estimate-costs",
