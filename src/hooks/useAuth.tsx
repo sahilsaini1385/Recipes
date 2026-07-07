@@ -43,15 +43,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // Keyed on the user id (not the session object) so routine token refreshes
+  // don't re-run the check mid-task. On a transient RPC failure we keep the
+  // previous answer rather than wrongly demoting a family member.
+  const userId = session?.user?.id ?? null;
   useEffect(() => {
-    if (!session) {
+    if (!userId) {
       setIsFamily(false);
       return;
     }
-    supabase
-      .rpc("is_family")
-      .then(({ data }) => setIsFamily(Boolean(data)));
-  }, [session]);
+    let cancelled = false;
+    supabase.rpc("is_family").then(({ data, error }) => {
+      if (cancelled || error) return;
+      setIsFamily(Boolean(data));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const signOut = async () => {
     await supabase.auth.signOut();

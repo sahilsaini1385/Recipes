@@ -64,7 +64,10 @@ export default function AddRecipe() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   if (loading) return null;
-  if (!session) {
+  // Never tear down an import or review in progress over an auth blip —
+  // individual saves/parses will surface real permission errors if any.
+  const busy = importing || queue.length > 0;
+  if (!session && !busy) {
     return (
       <main className="mx-auto max-w-md px-4 py-16 text-center">
         <p className="text-ink-soft">
@@ -76,7 +79,7 @@ export default function AddRecipe() {
       </main>
     );
   }
-  if (!isFamily) {
+  if (session && !isFamily && !busy) {
     return (
       <main className="mx-auto max-w-md px-4 py-16 text-center">
         <p className="text-ink-soft">
@@ -91,9 +94,17 @@ export default function AddRecipe() {
     entry: ExtractedEntry
   ): Promise<RecipeDraft | null> => {
     const body = entry.file ? { file: entry.file } : { text: entry.text };
-    const { data, error } = await supabase.functions.invoke("parse-recipe", {
+    let { data, error } = await supabase.functions.invoke("parse-recipe", {
       body,
     });
+    // One retry for transient network failures — long batch runs hit the
+    // occasional dropped request or timeout.
+    if (error && /Failed to send a request|Failed to fetch|timeout/i.test(error.message ?? "")) {
+      await new Promise((r) => setTimeout(r, 2000));
+      ({ data, error } = await supabase.functions.invoke("parse-recipe", {
+        body,
+      }));
+    }
     if (error) {
       // Surface the real reason from the function's JSON body when present.
       let detail = error.message || "Import failed";
