@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FileText, Import } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import {
   fetchDriveEntry,
   markDriveFile,
 } from "@/lib/driveSync";
-import { dedupeDrafts, normalizeTitle } from "@/lib/dedupe";
+import { completeness, normalizeTitle } from "@/lib/dedupe";
 import { cn } from "@/lib/utils";
 import type { RecipeDraft } from "@/lib/types";
 
@@ -31,6 +31,23 @@ interface QueueItem {
   draft: RecipeDraft;
   /** Set when this item came from Google Drive, to log the outcome. */
   driveFileId?: string;
+}
+
+type ImportEntry = ExtractedEntry & { driveFileId?: string };
+
+// Parsed-but-unreviewed recipes are kept on the device so an interrupted
+// import can be resumed instead of re-parsed from scratch.
+const PENDING_KEY = "pending-import-queue";
+
+function loadPending(): QueueItem[] | null {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    if (!raw) return null;
+    const items = JSON.parse(raw) as QueueItem[];
+    return Array.isArray(items) && items.length > 0 ? items : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function AddRecipe() {
@@ -46,12 +63,19 @@ export default function AddRecipe() {
     })
   );
 
-  // Review queue: single-recipe imports are a queue of one; zip imports can
-  // hold dozens. Each is reviewed and saved (or skipped) one at a time.
+  // Review queue. It GROWS while parsing runs in the background: review of
+  // recipe 1 starts as soon as it's parsed, while files 2..N keep parsing.
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
   const [savedCount, setSavedCount] = useState(0);
-  const reviewing = queue.length > 0;
+  const [parsing, setParsing] = useState(false);
+  const queueIndexRef = useRef(0);
+  queueIndexRef.current = queueIndex;
+  const formIndexRef = useRef(-1);
+
+  const [pendingResume, setPendingResume] = useState<QueueItem[] | null>(
+    loadPending
+  );
 
   const [pasteText, setPasteText] = useState("");
   const [importFiles, setImportFiles] = useState<File[]>([]);
@@ -62,6 +86,48 @@ export default function AddRecipe() {
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const reviewing = queue.length > 0;
+  // Reviewer caught up with the parser — waiting for the next recipe.
+  const waitingForNext = reviewing && queueIndex >= queue.length && parsing;
+
+  // Load the current queue item into the form exactly once per index.
+  useEffect(() => {
+    if (
+      queue.length > 0 &&
+      queueIndex < queue.length &&
+      formIndexRef.current !== queueIndex
+    ) {
+      formIndexRef.current = queueIndex;
+      setForm(draftToForm(queue[queueIndex].draft));
+      window.scrollTo({ top: 0 });
+    }
+  }, [queue, queueIndex]);
+
+  // Persist the unreviewed remainder so an interrupted session can resume.
+  useEffect(() => {
+    if (queue.length > 0 && queueIndex < queue.length) {
+      try {
+        localStorage.setItem(
+          PENDING_KEY,
+          JSON.stringify(queue.slice(queueIndex))
+        );
+      } catch {
+        // storage full — resume just won't be available
+      }
+    }
+  }, [queue, queueIndex]);
+
+  // Queue finished (reviewed past the end, parser done) — wrap up.
+  useEffect(() => {
+    if (queue.length > 0 && queueIndex >= queue.length && !parsing) {
+      localStorage.removeItem(PENDING_KEY);
+      setQueue([]);
+      setQueueIndex(0);
+      formIndexRef.current = -1;
+      navigate("/");
+    }
+  }, [queue.length, queueIndex, parsing, navigate]);
 
   if (loading) return null;
   // Never tear down an import or review in progress over an auth blip —
@@ -99,7 +165,12 @@ export default function AddRecipe() {
     });
     // One retry for transient network failures — long batch runs hit the
     // occasional dropped request or timeout.
-    if (error && /Failed to send a request|Failed to fetch|timeout/i.test(error.message ?? "")) {
+    if (
+      error &&
+      /Failed to send a request|Failed to fetch|timeout/i.test(
+        error.message ?? ""
+      )
+    ) {
       await new Promise((r) => setTimeout(r, 2000));
       ({ data, error } = await supabase.functions.invoke("parse-recipe", {
         body,
@@ -125,12 +196,115 @@ export default function AddRecipe() {
     return draft;
   };
 
+  /**
+   * Parse entries one by one, appending each parsed recipe to the review
+   * queue immediately — review and saving start with the first recipe while
+   * the rest keep parsing. Duplicates within the batch collapse on the fly.
+   */
+  const parseIntoQueue = async (entries: ImportEntry[], warnings: string[]) => {
+    setParsing(true);
+    setQueue([]);
+    setQueueIndex(0);
+    setSavedCount(0);
+    formIndexRef.current = -1;
+    setImportWarnings(warnings);
+    setPendingResume(null);
+    localStorage.removeItem(PENDING_KEY);
+
+    const appended: QueueItem[] = [];
+    const failed: string[] = [];
+    let duplicates = 0;
+
+    const publishWarnings = () => {
+      const w = [...warnings];
+      if (failed.length) w.push(`Skipped: ${failed.join("; ")}`);
+      if (duplicates > 0) {
+        w.push(
+          `${duplicates} duplicate${duplicates === 1 ? "" : "s"} collapsed (kept the most complete version).`
+        );
+      }
+      setImportWarnings(w);
+    };
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      setProgress(
+        entries.length > 1
+          ? `Parsing ${entry.name} (${i + 1} of ${entries.length})…`
+          : "Reading recipe…"
+      );
+      try {
+        const draft = await parseEntry(entry);
+        if (!draft) {
+          failed.push(`${entry.name} (not a recipe)`);
+          publishWarnings();
+          continue;
+        }
+        const item: QueueItem = {
+          sourceName: entry.name,
+          draft,
+          driveFileId: entry.driveFileId,
+        };
+        const norm = normalizeTitle(draft.title);
+        const dupIdx = appended.findIndex(
+          (q) => normalizeTitle(q.draft.title) === norm
+        );
+        if (dupIdx >= 0) {
+          duplicates++;
+          const existing = appended[dupIdx];
+          // Replace only if the earlier copy hasn't been reviewed yet.
+          if (
+            dupIdx >= queueIndexRef.current &&
+            completeness(draft) > completeness(existing.draft)
+          ) {
+            appended[dupIdx] = item;
+            setQueue((q) => q.map((x, idx) => (idx === dupIdx ? item : x)));
+            if (existing.driveFileId) {
+              await markDriveFile(
+                existing.driveFileId,
+                existing.sourceName,
+                "skipped"
+              );
+            }
+          } else if (item.driveFileId) {
+            await markDriveFile(item.driveFileId, item.sourceName, "skipped");
+          }
+          publishWarnings();
+          continue;
+        }
+        appended.push(item);
+        setQueue((q) => [...q, item]);
+      } catch (e) {
+        failed.push(`${entry.name} (${(e as Error).message})`);
+        publishWarnings();
+      }
+    }
+
+    setParsing(false);
+    setProgress("");
+    publishWarnings();
+
+    if (appended.length === 0) {
+      const firstFailure = failed[0] ?? "";
+      if (/Failed to send a request|Failed to fetch|not found/i.test(firstFailure)) {
+        throw new Error(
+          "The recipe parser isn't reachable. The 'parse-recipe' Edge Function may not be deployed in Supabase yet — see the README setup step, then try again."
+        );
+      }
+      throw new Error(
+        firstFailure
+          ? `Nothing could be imported. First problem: ${firstFailure}`
+          : "Nothing importable was found."
+      );
+    }
+  };
+
   const runImport = async () => {
     setImporting(true);
     setImportError(null);
     setImportWarnings([]);
     try {
-      let entries: ExtractedEntry[] = [];
+      let entries: ImportEntry[] = [];
       const warnings: string[] = [];
 
       if (importFiles.length > 0) {
@@ -155,83 +329,13 @@ export default function AddRecipe() {
         throw new Error("Paste recipe text or choose a file first.");
       }
 
-      await parseAndQueue(entries, warnings);
+      await parseIntoQueue(entries, warnings);
     } catch (e) {
       setImportError((e as Error).message);
     } finally {
       setImporting(false);
+      setParsing(false);
       setProgress("");
-    }
-  };
-
-  /** Parse extracted entries, dedupe, and open the review queue. */
-  const parseAndQueue = async (
-    entries: Array<ExtractedEntry & { driveFileId?: string }>,
-    warnings: string[]
-  ) => {
-    {
-      // (kept as a block to preserve the original queue-building flow)
-      const items: QueueItem[] = [];
-      const failed: string[] = [];
-      for (let i = 0; i < entries.length; i++) {
-        const entry = entries[i];
-        setProgress(
-          entries.length > 1
-            ? `Parsing ${entry.name} (${i + 1} of ${entries.length})…`
-            : "Reading recipe…"
-        );
-        try {
-          const draft = await parseEntry(entry);
-          if (draft) {
-            items.push({
-              sourceName: entry.name,
-              draft,
-              driveFileId: entry.driveFileId,
-            });
-          } else failed.push(`${entry.name} (not a recipe)`);
-        } catch (e) {
-          failed.push(`${entry.name} (${(e as Error).message})`);
-        }
-      }
-      if (failed.length) warnings.push(`Skipped: ${failed.join("; ")}`);
-
-      const deduped = dedupeDrafts(items);
-      // Drive files whose drafts were collapsed as duplicates still need to
-      // be logged, or they would be offered again on every sync.
-      const kept = new Set(deduped.map((i) => i));
-      for (const item of items) {
-        if (!kept.has(item) && item.driveFileId) {
-          await markDriveFile(item.driveFileId, item.sourceName, "skipped");
-        }
-      }
-      if (deduped.length < items.length) {
-        warnings.push(
-          `${items.length - deduped.length} duplicate${
-            items.length - deduped.length === 1 ? "" : "s"
-          } collapsed (kept the most complete version).`
-        );
-      }
-      // Show the per-file outcomes even when nothing succeeded, so the real
-      // failure reason is visible instead of a generic message.
-      setImportWarnings(warnings);
-      if (deduped.length === 0) {
-        const firstFailure = failed[0] ?? "";
-        if (/Failed to send a request|Failed to fetch|not found/i.test(firstFailure)) {
-          throw new Error(
-            "The recipe parser isn't reachable. The 'parse-recipe' Edge Function may not be deployed in Supabase yet — see the README setup step, then try again."
-          );
-        }
-        throw new Error(
-          firstFailure
-            ? `Nothing could be imported. First problem: ${firstFailure}`
-            : "Nothing importable was found."
-        );
-      }
-      setQueue(deduped);
-      setQueueIndex(0);
-      setSavedCount(0);
-      setForm(draftToForm(deduped[0].draft));
-      window.scrollTo({ top: 0 });
     }
   };
 
@@ -248,7 +352,7 @@ export default function AddRecipe() {
         return;
       }
       const warnings: string[] = [];
-      const entries: Array<ExtractedEntry & { driveFileId?: string }> = [];
+      const entries: ImportEntry[] = [];
       const unreadable: string[] = [];
       for (let i = 0; i < newFiles.length; i++) {
         const f = newFiles[i];
@@ -270,25 +374,34 @@ export default function AddRecipe() {
           "Found new files in Drive, but none could be read as recipes."
         );
       }
-      await parseAndQueue(entries, warnings);
+      await parseIntoQueue(entries, warnings);
     } catch (e) {
       setImportError((e as Error).message);
     } finally {
       setImporting(false);
+      setParsing(false);
       setProgress("");
     }
   };
 
+  const resumePending = () => {
+    if (!pendingResume) return;
+    setImportError(null);
+    setImportWarnings([]);
+    setSavedCount(0);
+    formIndexRef.current = -1;
+    setQueue(pendingResume);
+    setQueueIndex(0);
+    setPendingResume(null);
+  };
+
+  const discardPending = () => {
+    localStorage.removeItem(PENDING_KEY);
+    setPendingResume(null);
+  };
+
   const advanceQueue = () => {
-    const next = queueIndex + 1;
-    if (next < queue.length) {
-      setQueueIndex(next);
-      setForm(draftToForm(queue[next].draft));
-      window.scrollTo({ top: 0 });
-    } else {
-      setQueue([]);
-      navigate("/");
-    }
+    setQueueIndex((i) => i + 1);
   };
 
   const skipCurrent = async () => {
@@ -310,11 +423,16 @@ export default function AddRecipe() {
       if (item?.driveFileId) {
         await markDriveFile(item.driveFileId, item.sourceName, "imported");
       }
-      if (reviewing && queue.length > 1) {
+      if (reviewing && queue.length === 1 && queueIndex === 0 && !parsing) {
+        // Single-recipe import: jump straight to the saved recipe.
+        localStorage.removeItem(PENDING_KEY);
+        setQueue([]);
+        formIndexRef.current = -1;
+        navigate(`/recipe/${slug}`);
+      } else if (reviewing) {
         setSavedCount((n) => n + 1);
         advanceQueue();
       } else {
-        setQueue([]);
         navigate(`/recipe/${slug}`);
       }
     } catch (e) {
@@ -324,52 +442,79 @@ export default function AddRecipe() {
     }
   };
 
-  const current = reviewing ? queue[queueIndex] : null;
+  const current =
+    reviewing && queueIndex < queue.length ? queue[queueIndex] : null;
   const alreadyExists =
     current &&
     recipes?.some(
       (r) => normalizeTitle(r.title) === normalizeTitle(current.draft.title)
     );
+  const batch = queue.length > 1 || parsing;
 
   return (
     <main className="mx-auto max-w-2xl px-4 pb-16 pt-4">
       <h1 className="mb-4 text-2xl">
         {reviewing
-          ? queue.length > 1
-            ? `Review recipe ${queueIndex + 1} of ${queue.length}`
+          ? batch
+            ? `Review recipe ${Math.min(queueIndex + 1, queue.length)} of ${queue.length}${parsing ? "+" : ""}`
             : "Review imported recipe"
           : "Add recipe"}
       </h1>
 
       {reviewing && (
         <div className="mb-4 space-y-2">
-          <p className="rounded-lg bg-accent-soft p-3 text-sm text-accent-dark">
-            {queue.length > 1 ? (
-              <>
-                From <strong>{current?.sourceName}</strong>. Check the parsed
-                result, fix anything wrong, then save — or skip this one.
-                {savedCount > 0 && ` Saved so far: ${savedCount}.`}
-              </>
-            ) : (
-              "Check the parsed ingredients and steps below, fix anything that looks wrong, then save."
-            )}
-          </p>
+          {parsing && (
+            <p className="rounded-lg bg-paper-warm p-3 text-sm text-ink-soft">
+              {progress || "Parsing continues in the background…"} Each recipe
+              you save is stored immediately.
+            </p>
+          )}
+          {current && (
+            <p className="rounded-lg bg-accent-soft p-3 text-sm text-accent-dark">
+              {batch ? (
+                <>
+                  From <strong>{current.sourceName}</strong>. Check the parsed
+                  result, fix anything wrong, then save — or skip this one.
+                  {savedCount > 0 && ` Saved so far: ${savedCount}.`}
+                </>
+              ) : (
+                "Check the parsed ingredients and steps below, fix anything that looks wrong, then save."
+              )}
+            </p>
+          )}
           {alreadyExists && (
             <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
               A recipe with this title already exists — saving will create a
               second copy. Skip if it's the same one.
             </p>
           )}
+          {importError && (
+            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              {importError}
+            </p>
+          )}
           {importWarnings.map((w, i) => (
-            <p key={i} className="rounded-lg bg-paper-warm p-3 text-xs text-ink-soft">
+            <p
+              key={i}
+              className="rounded-lg bg-paper-warm p-3 text-xs text-ink-soft"
+            >
               {w}
             </p>
           ))}
-          {queue.length > 1 && (
+          {current && batch && (
             <Button variant="outline" size="sm" onClick={skipCurrent}>
               Skip this recipe
             </Button>
           )}
+        </div>
+      )}
+
+      {waitingForNext && (
+        <div className="rounded-xl bg-paper-warm p-8 text-center text-ink-soft">
+          <p className="font-medium">All caught up!</p>
+          <p className="mt-1 text-sm">
+            Waiting for the next recipe to finish parsing…
+          </p>
         </div>
       )}
 
@@ -387,6 +532,24 @@ export default function AddRecipe() {
             icon={<Import className="h-4 w-4" />}
             label="Import"
           />
+        </div>
+      )}
+
+      {!reviewing && pendingResume && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <p>
+            An earlier import was interrupted —{" "}
+            <strong>{pendingResume.length}</strong> parsed recipe
+            {pendingResume.length === 1 ? "" : "s"} still waiting for review.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" onClick={resumePending}>
+              Resume review
+            </Button>
+            <Button size="sm" variant="outline" onClick={discardPending}>
+              Discard
+            </Button>
+          </div>
         </div>
       )}
 
@@ -422,13 +585,16 @@ export default function AddRecipe() {
             )}
             <p className="mt-1 text-xs text-ink-faint">
               Select as many files as you like. Zips are unpacked
-              automatically, every recipe is parsed, duplicates are collapsed,
-              and you review each one before it is saved.
+              automatically, review starts with the first recipe while the
+              rest keep parsing, and every save is stored immediately.
             </p>
           </div>
           {importError && <p className="text-sm text-red-700">{importError}</p>}
           {importWarnings.map((w, i) => (
-            <p key={i} className="rounded-lg bg-paper-warm p-3 text-xs text-ink-soft">
+            <p
+              key={i}
+              className="rounded-lg bg-paper-warm p-3 text-xs text-ink-soft"
+            >
               {w}
             </p>
           ))}
@@ -456,27 +622,19 @@ export default function AddRecipe() {
             Looks in the family's shared Drive folder and imports anything
             added since the last check.
           </p>
-          <p className="text-center text-xs text-ink-faint">
-            Recipes are parsed automatically. You review and edit each result
-            before anything is saved.
-          </p>
         </div>
-      ) : (
+      ) : !waitingForNext ? (
         <RecipeForm
           value={form}
           onChange={setForm}
           onSubmit={save}
           submitLabel={
-            reviewing && queue.length > 1
-              ? queueIndex + 1 < queue.length
-                ? "Save and review next"
-                : "Save last recipe"
-              : "Save recipe"
+            reviewing && batch ? "Save and review next" : "Save recipe"
           }
           saving={saving}
           error={saveError}
         />
-      )}
+      ) : null}
     </main>
   );
 }
