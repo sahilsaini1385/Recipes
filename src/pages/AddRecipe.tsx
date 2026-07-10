@@ -211,13 +211,25 @@ export default function AddRecipe() {
     setPendingResume(null);
     localStorage.removeItem(PENDING_KEY);
 
+    // Snapshot of existing recipe titles: file names that normalize to one
+    // of these are skipped without spending an API call.
+    const existingTitles = new Set(
+      (recipes ?? []).map((r) => normalizeTitle(r.title))
+    );
+
     const appended: QueueItem[] = [];
     const failed: string[] = [];
     let duplicates = 0;
+    let alreadyOnSite = 0;
 
     const publishWarnings = () => {
       const w = [...warnings];
       if (failed.length) w.push(`Skipped: ${failed.join("; ")}`);
+      if (alreadyOnSite > 0) {
+        w.push(
+          `${alreadyOnSite} file${alreadyOnSite === 1 ? "" : "s"} skipped without parsing — a recipe with the same name is already on the site.`
+        );
+      }
       if (duplicates > 0) {
         w.push(
           `${duplicates} duplicate${duplicates === 1 ? "" : "s"} collapsed (kept the most complete version).`
@@ -228,6 +240,24 @@ export default function AddRecipe() {
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
+
+      // Name pre-check: "Copy of Chili (1).docx" normalizes to "chili" —
+      // if that title already exists (on the site or in this batch), skip
+      // the file before it costs anything.
+      const nameNorm = normalizeTitle(entry.name);
+      if (
+        nameNorm &&
+        (existingTitles.has(nameNorm) ||
+          appended.some((q) => normalizeTitle(q.draft.title) === nameNorm))
+      ) {
+        alreadyOnSite++;
+        if (entry.driveFileId) {
+          await markDriveFile(entry.driveFileId, entry.name, "skipped");
+        }
+        publishWarnings();
+        continue;
+      }
+
       setProgress(
         entries.length > 1
           ? `Parsing ${entry.name} (${i + 1} of ${entries.length})…`
@@ -346,12 +376,42 @@ export default function AddRecipe() {
     setImportWarnings([]);
     try {
       setProgress("Checking Google Drive…");
-      const newFiles = await listNewDriveFiles();
-      if (newFiles.length === 0) {
+      const allNewFiles = await listNewDriveFiles();
+      if (allNewFiles.length === 0) {
         setImportWarnings(["No new files in the Drive folder."]);
         return;
       }
       const warnings: string[] = [];
+
+      // Skip Drive files whose names match existing recipes before even
+      // downloading them — no bandwidth, no API tokens.
+      const existingTitles = new Set(
+        (recipes ?? []).map((r) => normalizeTitle(r.title))
+      );
+      const newFiles: typeof allNewFiles = [];
+      let alreadyOnSite = 0;
+      for (const f of allNewFiles) {
+        const nameNorm = normalizeTitle(f.name);
+        if (nameNorm && existingTitles.has(nameNorm)) {
+          alreadyOnSite++;
+          await markDriveFile(f.id, f.name, "skipped");
+        } else {
+          newFiles.push(f);
+        }
+      }
+      if (alreadyOnSite > 0) {
+        warnings.push(
+          `${alreadyOnSite} Drive file${alreadyOnSite === 1 ? "" : "s"} skipped without parsing — a recipe with the same name is already on the site.`
+        );
+      }
+      if (newFiles.length === 0) {
+        setImportWarnings([
+          ...warnings,
+          "Nothing new to import — everything in the folder matches an existing recipe.",
+        ]);
+        return;
+      }
+
       const entries: ImportEntry[] = [];
       const unreadable: string[] = [];
       for (let i = 0; i < newFiles.length; i++) {
