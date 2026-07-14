@@ -221,6 +221,7 @@ export default function AddRecipe() {
     const failed: string[] = [];
     let duplicates = 0;
     let alreadyOnSite = 0;
+    let alreadyOnSiteParsed = 0;
 
     const publishWarnings = () => {
       const w = [...warnings];
@@ -228,6 +229,11 @@ export default function AddRecipe() {
       if (alreadyOnSite > 0) {
         w.push(
           `${alreadyOnSite} file${alreadyOnSite === 1 ? "" : "s"} skipped without parsing — a recipe with the same name is already on the site.`
+        );
+      }
+      if (alreadyOnSiteParsed > 0) {
+        w.push(
+          `${alreadyOnSiteParsed} recipe${alreadyOnSiteParsed === 1 ? "" : "s"} auto-skipped after parsing — already on the site.`
         );
       }
       if (duplicates > 0) {
@@ -267,6 +273,17 @@ export default function AddRecipe() {
         const draft = await parseEntry(entry);
         if (!draft) {
           failed.push(`${entry.name} (not a recipe)`);
+          publishWarnings();
+          continue;
+        }
+        // The parsed title may match an existing recipe even when the file
+        // name didn't — auto-skip instead of asking the reviewer to.
+        const parsedNorm = normalizeTitle(draft.title);
+        if (parsedNorm && existingTitles.has(parsedNorm)) {
+          alreadyOnSiteParsed++;
+          if (entry.driveFileId) {
+            await markDriveFile(entry.driveFileId, entry.name, "skipped");
+          }
           publishWarnings();
           continue;
         }
@@ -315,6 +332,15 @@ export default function AddRecipe() {
     publishWarnings();
 
     if (appended.length === 0) {
+      const skippedAsExisting = alreadyOnSite + alreadyOnSiteParsed;
+      if (skippedAsExisting > 0 && failed.length === 0) {
+        // Not an error — everything was already on the site.
+        setImportWarnings([
+          ...warnings,
+          `Nothing new to import — all ${skippedAsExisting} recipe${skippedAsExisting === 1 ? " is" : "s are"} already on the site.`,
+        ]);
+        return;
+      }
       const firstFailure = failed[0] ?? "";
       if (/Failed to send a request|Failed to fetch|not found/i.test(firstFailure)) {
         throw new Error(
