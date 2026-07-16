@@ -85,7 +85,8 @@ Deno.serve(async (req) => {
       const lines = (r.ingredients as Array<{ raw: string }>)
         .map((i) => `- ${i.raw}`)
         .join("\n");
-      return `id: ${r.id}\ntitle: ${r.title}\ningredients:\n${lines}`;
+      const servings = Math.max(1, r.base_servings ?? 4);
+      return `id: ${r.id}\ntitle: ${r.title}\nservings: ${servings}\ningredients:\n${lines}`;
     })
     .join("\n\n---\n\n");
 
@@ -96,10 +97,18 @@ Deno.serve(async (req) => {
       max_tokens: 2048,
       system:
         "You estimate grocery costs. For each recipe, estimate the total cost " +
-        "in USD of the ingredient amounts actually used (a recipe using 1 tbsp " +
-        "of a $4 spice jar costs cents, not $4), assuming typical US " +
-        "supermarket prices. Pantry staples like salt, pepper, and water are " +
-        "near zero. Rough estimates are expected — don't agonize.",
+        "in USD of making it ONCE at the stated serving count, using typical " +
+        "US supermarket prices. Rules:\n" +
+        "- Count only the portion actually used: 1 tbsp from a $4 spice jar " +
+        "costs cents, not $4. Never charge the full price of a jar, bottle, " +
+        "bag of flour, or stick of butter unless the recipe uses it all.\n" +
+        "- Ingredients with no stated amount are almost always small " +
+        "(dredging flour, a spoonful of capers, seasoning): price them at " +
+        "well under a dollar.\n" +
+        "- If amounts say 'per person' or 'per serving', multiply by the " +
+        "stated serving count to get the recipe total.\n" +
+        "- Pantry staples like salt, pepper, and water are near zero.\n" +
+        "Rough estimates are expected — don't agonize.",
       messages: [
         {
           role: "user",
