@@ -23,7 +23,8 @@ values
   ('johnjungman@gmail.com'),
   ('wrjungman@gmail.com'),
   ('rickiejungman@gmail.com'),
-  ('nancyjungman@gmail.com')
+  ('nancyjungman@gmail.com'),
+  ('jungman.bob@gmail.com')
 on conflict (email) do nothing;
 
 create or replace function public.is_family()
