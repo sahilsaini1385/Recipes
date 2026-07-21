@@ -53,15 +53,15 @@ export default function Home() {
   }, [recipes, category, tag, favoritesOnly, query, favorites]);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-16 pt-4">
+    <main className="mx-auto max-w-3xl px-4 pb-16 pt-5">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
         <Input
           type="search"
-          placeholder="Search by title or ingredient"
+          placeholder="Search recipes and ingredients…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="pl-9"
+          className="h-12 rounded-full pl-10 shadow-sm"
         />
       </div>
 
@@ -167,19 +167,21 @@ function CategoryChip({
     <button
       onClick={onClick}
       className={cn(
-        "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium",
+        "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95",
         active
-          ? "border-accent bg-accent text-white"
-          : "border-paper-deep bg-white text-ink"
+          ? "border-accent bg-accent text-white shadow-sm"
+          : "border-paper-deep bg-white text-ink hover:border-accent/40"
       )}
     >
       {label}
-      <Badge
-        variant={active ? "default" : "secondary"}
-        className={cn(active && "bg-white/20 text-white")}
+      <span
+        className={cn(
+          "rounded-full px-1.5 text-xs",
+          active ? "bg-white/25 text-white" : "bg-paper-warm text-ink-soft"
+        )}
       >
         {count}
-      </Badge>
+      </span>
     </button>
   );
 }
