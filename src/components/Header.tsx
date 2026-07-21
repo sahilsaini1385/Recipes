@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, LogOut, LogIn, ChefHat } from "lucide-react";
+import { Plus, LogOut, LogIn, ChefHat, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -22,6 +22,14 @@ export function Header() {
           </span>
         </Link>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Family passport"
+            onClick={() => navigate("/passport")}
+          >
+            <Globe className="h-5 w-5" />
+          </Button>
           {isFamily && (
             <Button size="sm" onClick={() => navigate("/add")}>
               <Plus className="h-4 w-4" />

@@ -5,6 +5,7 @@ import RecipePage from "@/pages/RecipePage";
 import AddRecipe from "@/pages/AddRecipe";
 import EditRecipe from "@/pages/EditRecipe";
 import SignIn from "@/pages/SignIn";
+import Passport from "@/pages/Passport";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 function SetupNotice() {
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/recipe/:slug" element={<RecipePage />} />
         <Route path="/add" element={<AddRecipe />} />
         <Route path="/edit/:slug" element={<EditRecipe />} />
+        <Route path="/passport" element={<Passport />} />
         <Route path="/signin" element={<SignIn />} />
       </Routes>
     </div>
