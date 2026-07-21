@@ -20,7 +20,7 @@ export function RecipeCard({ recipe, isFavorite, onToggleFavorite }: Props) {
   return (
     <Card className="group relative overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-card-hover">
       <Link to={`/recipe/${recipe.slug}`} className="block">
-        {photo ? (
+        {photo && (
           <div className="relative h-40 w-full overflow-hidden">
             <img
               src={photo}
@@ -32,12 +32,6 @@ export function RecipeCard({ recipe, isFavorite, onToggleFavorite }: Props) {
               <Badge className="bg-accent text-white shadow-sm">
                 {recipe.category}
               </Badge>
-            </span>
-          </div>
-        ) : (
-          <div className="flex h-24 items-center justify-center bg-gradient-to-br from-paper-warm to-paper-deep">
-            <span className="font-serif text-3xl text-accent/30">
-              {recipe.title.charAt(0)}
             </span>
           </div>
         )}
