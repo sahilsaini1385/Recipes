@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Search, Heart } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { RecipeCard } from "@/components/RecipeCard";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -26,7 +25,6 @@ export default function Home() {
   useCostEstimates(); // quietly backfills missing cost estimates
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
-  const [tag, setTag] = useState<string | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   const counts = useMemo(() => {
@@ -37,20 +35,18 @@ export default function Home() {
     return map;
   }, [recipes]);
 
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of recipes ?? []) for (const t of r.tags) set.add(t);
-    return [...set].sort();
-  }, [recipes]);
+  const favoriteCount = useMemo(
+    () => (recipes ?? []).filter((r) => favorites.has(r.id)).length,
+    [recipes, favorites]
+  );
 
   const filtered = useMemo(() => {
     let list = recipes ?? [];
-    if (category) list = list.filter((r) => r.category === category);
-    if (tag) list = list.filter((r) => r.tags.includes(tag));
     if (favoritesOnly) list = list.filter((r) => favorites.has(r.id));
+    if (category) list = list.filter((r) => r.category === category);
     if (query.trim()) list = list.filter((r) => matchesQuery(r, query.trim()));
     return list;
-  }, [recipes, category, tag, favoritesOnly, query, favorites]);
+  }, [recipes, category, favoritesOnly, query, favorites]);
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16 pt-5">
@@ -65,8 +61,37 @@ export default function Home() {
         />
       </div>
 
-      {/* Category chips with counts */}
+      {/* One row: Favorites toggle + category chips with counts */}
       <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
+        <button
+          onClick={() => setFavoritesOnly(!favoritesOnly)}
+          className={cn(
+            "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95",
+            favoritesOnly
+              ? "border-accent bg-accent text-white shadow-sm"
+              : "border-paper-deep bg-white text-ink hover:border-accent/40"
+          )}
+        >
+          <Heart
+            className={cn(
+              "h-4 w-4",
+              favoritesOnly ? "fill-white text-white" : "text-accent"
+            )}
+          />
+          Favorites
+          {favoriteCount > 0 && (
+            <span
+              className={cn(
+                "rounded-full px-1.5 text-xs",
+                favoritesOnly
+                  ? "bg-white/25 text-white"
+                  : "bg-paper-warm text-ink-soft"
+              )}
+            >
+              {favoriteCount}
+            </span>
+          )}
+        </button>
         <CategoryChip
           label="All"
           count={recipes?.length ?? 0}
@@ -81,41 +106,6 @@ export default function Home() {
             active={category === c}
             onClick={() => setCategory(category === c ? null : c)}
           />
-        ))}
-      </div>
-
-      {/* Tag filter + favorites toggle */}
-      <div className="-mx-4 mt-2 flex items-center gap-2 overflow-x-auto px-4 pb-1">
-        <button
-          onClick={() => setFavoritesOnly(!favoritesOnly)}
-          className={cn(
-            "flex h-8 shrink-0 items-center gap-1 rounded-full border px-3 text-sm",
-            favoritesOnly
-              ? "border-accent bg-accent-soft text-accent-dark"
-              : "border-paper-deep bg-white text-ink-soft"
-          )}
-        >
-          <Heart
-            className={cn(
-              "h-3.5 w-3.5",
-              favoritesOnly && "fill-accent text-accent"
-            )}
-          />
-          Favorites
-        </button>
-        {allTags.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTag(tag === t ? null : t)}
-            className={cn(
-              "h-8 shrink-0 rounded-full border px-3 text-sm",
-              tag === t
-                ? "border-accent bg-accent-soft text-accent-dark"
-                : "border-paper-deep bg-white text-ink-soft"
-            )}
-          >
-            {t}
-          </button>
         ))}
       </div>
 
