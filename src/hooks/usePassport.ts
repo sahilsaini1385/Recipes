@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 
 export interface FamilyMember {
   id: string;
@@ -25,9 +26,17 @@ function groupVisits(
   return out;
 }
 
+// Don't re-sync from the Google Sheet more than once per few minutes —
+// the sheet doesn't change that fast and every visit already gets fresh data.
+const SYNC_AT_KEY = "passport-synced-at";
+const SYNC_INTERVAL_MS = 5 * 60 * 1000;
+
 export function usePassport() {
+  const { isFamily } = useAuth();
   const [data, setData] = useState<Passport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const syncStarted = useRef(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -63,6 +72,38 @@ export function usePassport() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Pull the latest data from the family Google Sheet (the source of truth)
+  // whenever a signed-in family member opens the page. Throttled so quick
+  // back-and-forth navigation doesn't hammer the sheet.
+  const sync = useCallback(
+    async (force = false) => {
+      const last = Number(localStorage.getItem(SYNC_AT_KEY) ?? 0);
+      if (!force && Date.now() - last < SYNC_INTERVAL_MS) return;
+      setSyncing(true);
+      try {
+        const { data: result, error } =
+          await supabase.functions.invoke("passport-sync", { body: {} });
+        if (!error && result?.ok) {
+          localStorage.setItem(SYNC_AT_KEY, String(Date.now()));
+          await load();
+        } else if (error) {
+          console.warn("passport-sync failed:", error);
+        }
+      } catch (e) {
+        console.warn("passport-sync failed:", e);
+      } finally {
+        setSyncing(false);
+      }
+    },
+    [load]
+  );
+
+  useEffect(() => {
+    if (!isFamily || syncStarted.current) return;
+    syncStarted.current = true;
+    sync();
+  }, [isFamily, sync]);
 
   const addMember = useCallback(
     async (name: string) => {
@@ -144,6 +185,8 @@ export function usePassport() {
   return {
     data,
     error,
+    syncing,
+    sync,
     reload: load,
     addMember,
     removeMember,

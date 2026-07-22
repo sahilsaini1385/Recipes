@@ -12,7 +12,7 @@ export function flagEmoji(code: string): string {
 }
 
 // UN member states + a few commonly "counted" places (Taiwan, Hong Kong,
-// Kosovo, Vatican, Puerto Rico). Alphabetical by name.
+// Kosovo, Vatican, Puerto Rico, Bermuda, Curaçao). Alphabetical by name.
 export const COUNTRIES: Country[] = [
   { code: "AF", name: "Afghanistan" },
   { code: "AL", name: "Albania" },
@@ -33,6 +33,7 @@ export const COUNTRIES: Country[] = [
   { code: "BE", name: "Belgium" },
   { code: "BZ", name: "Belize" },
   { code: "BJ", name: "Benin" },
+  { code: "BM", name: "Bermuda" },
   { code: "BT", name: "Bhutan" },
   { code: "BO", name: "Bolivia" },
   { code: "BA", name: "Bosnia and Herzegovina" },
@@ -58,6 +59,7 @@ export const COUNTRIES: Country[] = [
   { code: "CI", name: "Côte d'Ivoire" },
   { code: "HR", name: "Croatia" },
   { code: "CU", name: "Cuba" },
+  { code: "CW", name: "Curaçao" },
   { code: "CY", name: "Cyprus" },
   { code: "CZ", name: "Czechia" },
   { code: "DK", name: "Denmark" },
