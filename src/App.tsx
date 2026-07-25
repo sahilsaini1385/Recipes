@@ -1,5 +1,7 @@
-import { Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { Header } from "@/components/Header";
+import { BottomNav } from "@/components/BottomNav";
 import Home from "@/pages/Home";
 import RecipePage from "@/pages/RecipePage";
 import AddRecipe from "@/pages/AddRecipe";
@@ -22,10 +24,18 @@ function SetupNotice() {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    const section = pathname.startsWith("/passport") ? "Passport" : "Recipes";
+    document.title = `Jungman Family · ${section}`;
+  }, [pathname]);
+
   if (!isSupabaseConfigured) return <SetupNotice />;
 
   return (
-    <div className="min-h-screen">
+    // Bottom padding keeps content clear of the phone tab bar.
+    <div className="min-h-screen pb-16 sm:pb-0">
       <Header />
       <Routes>
         <Route path="/" element={<Home />} />
@@ -35,6 +45,7 @@ export default function App() {
         <Route path="/passport" element={<Passport />} />
         <Route path="/signin" element={<SignIn />} />
       </Routes>
+      <BottomNav />
     </div>
   );
 }

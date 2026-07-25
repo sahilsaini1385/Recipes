@@ -153,7 +153,8 @@ export default function RecipePage() {
         </section>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-paper-deep bg-paper/95 p-3 backdrop-blur">
+      {/* Sits above the phone tab bar; flush with the bottom on larger screens. */}
+      <div className="fixed inset-x-0 bottom-16 z-10 border-t border-paper-deep bg-paper/95 p-3 backdrop-blur sm:bottom-0">
         <div className="mx-auto max-w-3xl">
           <Button size="lg" className="w-full" onClick={() => setCooking(true)}>
             <ChefHat className="h-5 w-5" />
