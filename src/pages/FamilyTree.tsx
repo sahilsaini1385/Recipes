@@ -76,6 +76,8 @@ interface PlacedCard {
   row: number;
   y?: number; // top, px (filled in after rows are normalized)
   label?: string;
+  /** Spouse shown on the left because their parents sit on that side. */
+  flip?: boolean;
 }
 
 interface PendingEdge {
@@ -84,17 +86,18 @@ interface PendingEdge {
   kind: "child" | "spouseParents";
 }
 
-// A branch's outline: for each row it touches, how far left/right it reaches
-// (relative to the branch's own card center). Siblings pack against each
-// other's outlines so nobody drifts further apart than needed.
-type Extent = { l: number; r: number };
-type Shape = Map<number, Extent>;
+// A branch's outline: for each row it touches, the list of occupied
+// horizontal intervals (relative to the branch's own card center). Keeping
+// a list — not just the min/max span — lets cards tuck into real gaps.
+type Interval = { l: number; r: number };
+type Shape = Map<number, Interval[]>;
 
 interface RelPlace {
   node: TreeNode;
   dx: number;
   drow: number;
   label?: string;
+  flip?: boolean;
 }
 
 interface BranchLayout {
@@ -104,15 +107,52 @@ interface BranchLayout {
 }
 
 function mergeShape(target: Shape, src: Shape, dx: number, drow: number) {
-  for (const [row, ext] of src) {
+  for (const [row, ivs] of src) {
     const nr = row + drow;
-    const moved = { l: ext.l + dx, r: ext.r + dx };
-    const cur = target.get(nr);
-    target.set(
-      nr,
-      cur ? { l: Math.min(cur.l, moved.l), r: Math.max(cur.r, moved.r) } : moved
-    );
+    const list = target.get(nr) ?? [];
+    for (const iv of ivs) list.push({ l: iv.l + dx, r: iv.r + dx });
+    list.sort((a, b) => a.l - b.l);
+    // Coalesce touching intervals to keep the lists short.
+    const merged: Interval[] = [];
+    for (const iv of list) {
+      const last = merged[merged.length - 1];
+      if (last && iv.l <= last.r) last.r = Math.max(last.r, iv.r);
+      else merged.push({ ...iv });
+    }
+    target.set(nr, merged);
   }
+}
+
+/**
+ * Slide `moving` (shifted down by drow) horizontally from startDx in the
+ * given direction until it no longer collides with `base`, and return the
+ * offset. This is what lets a branch settle into the nearest free slot.
+ */
+function packOffset(
+  base: Shape,
+  moving: Shape,
+  drow: number,
+  startDx: number,
+  dir: 1 | -1
+): number {
+  let dx = startDx;
+  for (let guard = 0; guard < 100; guard++) {
+    let pushed = false;
+    for (const [row, ivs] of moving) {
+      const baseIvs = base.get(row + drow);
+      if (!baseIvs) continue;
+      for (const iv of ivs) {
+        for (const b of baseIvs) {
+          if (iv.l + dx < b.r + HGAP && iv.r + dx > b.l - HGAP) {
+            dx = dir > 0 ? b.r + HGAP - iv.l : b.l - HGAP - iv.r;
+            pushed = true;
+          }
+        }
+      }
+    }
+    if (!pushed) return dx;
+  }
+  return dx;
 }
 
 /**
@@ -143,43 +183,34 @@ function hoist(n: TreeNode): TreeNode {
 function layoutBranch(n: TreeNode): BranchLayout {
   const kids = n.children.map(layoutBranch);
 
-  // Pack siblings left-to-right: each slides left until its outline is one
-  // gap away from everything already placed, at the closest row.
+  // Pack siblings left-to-right: each slides until its outline is one gap
+  // clear of everything already placed. Keeping sibling order, deeper rows
+  // may still tuck into gaps left by earlier branches.
   const packed: Shape = new Map();
   const offsets: number[] = [];
   kids.forEach((k, i) => {
-    let dx = 0;
-    if (i > 0) {
-      dx = -Infinity;
-      for (const [row, ext] of k.shape) {
-        const m = packed.get(row);
-        if (m) dx = Math.max(dx, m.r + HGAP - ext.l);
-      }
-      if (dx === -Infinity) {
-        const maxR = Math.max(...[...packed.values()].map((e) => e.r));
-        const minL = Math.min(...[...k.shape.values()].map((e) => e.l));
-        dx = maxR + HGAP - minL;
-      }
-    }
+    const dx = i === 0 ? 0 : packOffset(packed, k.shape, 0, offsets[i - 1] + 1, 1);
     offsets.push(dx);
     mergeShape(packed, k.shape, dx, 0);
   });
 
   // Center the card over its children, unless a child's in-law card
-  // occupies this row — then slide just far enough to whichever side is
-  // closer.
+  // occupies this row — then settle into the nearest free slot.
   let cx = kids.length ? (offsets[0] + offsets[offsets.length - 1]) / 2 : 0;
-  const claimed = packed.get(-1);
-  if (claimed && cx + CARD_W / 2 + HGAP > claimed.l && cx - CARD_W / 2 - HGAP < claimed.r) {
-    const leftCx = claimed.l - HGAP - CARD_W / 2;
-    const rightCx = claimed.r + HGAP + CARD_W / 2;
+  const cardShape: Shape = new Map([[0, [{ l: -CARD_W / 2, r: CARD_W / 2 }]]]);
+  const rowAbove = packed.get(-1);
+  if (rowAbove) {
+    const base: Shape = new Map([[0, rowAbove]]);
+    const rightCx = packOffset(base, cardShape, 0, cx, 1);
+    const leftCx = packOffset(base, cardShape, 0, cx, -1);
     cx = cx - leftCx <= rightCx - cx ? leftCx : rightCx;
   }
 
-  const shape: Shape = new Map([[0, { l: -CARD_W / 2, r: CARD_W / 2 }]]);
+  const shape: Shape = new Map([[0, [{ l: -CARD_W / 2, r: CARD_W / 2 }]]]);
   mergeShape(shape, packed, -cx, 1);
 
-  const places: RelPlace[] = [{ node: n, dx: 0, drow: 0 }];
+  const self: RelPlace = { node: n, dx: 0, drow: 0 };
+  const places: RelPlace[] = [self];
   const edges: PendingEdge[] = [];
   kids.forEach((k, i) => {
     edges.push({ fromId: n.id, toId: n.children[i].id, kind: "child" });
@@ -190,25 +221,32 @@ function layoutBranch(n: TreeNode): BranchLayout {
   });
 
   // The spouse's parents (and any branch hanging off them, e.g. the
-  // spouse's siblings) sit directly above the spouse's half of this card,
-  // so the short dashed drop into their child can't be misread.
+  // spouse's siblings) go directly above this card — on whichever side is
+  // closer. If they land on the left, the couple flips so the spouse's
+  // half faces their parents.
   if (n.parentsSpouse && n.spouse_name) {
     const inLaws = layoutBranch(n.parentsSpouse);
-    let dxSp = CARD_W / 2 + HGAP;
-    for (const [row, ext] of inLaws.shape) {
-      const m = shape.get(row - 1);
-      if (m) dxSp = Math.max(dxSp, m.r + HGAP - ext.l);
-    }
+    const near = CARD_W / 2 + HGAP;
+    const right = packOffset(shape, inLaws.shape, -1, near, 1);
+    const left = packOffset(shape, inLaws.shape, -1, -near, -1);
+    const flip = Math.abs(left) < Math.abs(right);
+    const dxSp = flip ? left : right;
+    self.flip = flip;
+
+    const others = n.parentsSpouse.children.map((c) => firstName(c.name));
+    const names = [firstName(n.spouse_name), ...others];
+    const label =
+      (names.length > 1
+        ? `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`
+        : names[0]) + "'s parents";
+
     mergeShape(shape, inLaws.shape, dxSp, -1);
     for (const p of inLaws.places) {
       places.push({
         ...p,
         dx: p.dx + dxSp,
         drow: p.drow - 1,
-        label:
-          p.node.id === n.parentsSpouse.id
-            ? `${firstName(n.spouse_name)}'s parents`
-            : p.label,
+        label: p.node.id === n.parentsSpouse.id ? label : p.label,
       });
     }
     edges.push(...inLaws.edges);
@@ -226,14 +264,16 @@ function layoutChart(roots: TreeNode[]) {
   let cursor = 0;
   for (const r of displayRoots) {
     const branch = layoutBranch(r);
-    const minL = Math.min(...[...branch.shape.values()].map((e) => e.l));
-    const maxR = Math.max(...[...branch.shape.values()].map((e) => e.r));
+    const all = [...branch.shape.values()].flat();
+    const minL = Math.min(...all.map((e) => e.l));
+    const maxR = Math.max(...all.map((e) => e.r));
     for (const p of branch.places) {
       cards.push({
         node: p.node,
         x: cursor + (p.dx - minL) - CARD_W / 2,
         row: p.drow,
         label: p.label,
+        flip: p.flip,
       });
     }
     edges.push(...branch.edges);
@@ -268,12 +308,18 @@ function layoutChart(roots: TreeNode[]) {
     // children lines.
     const fx = from.x + CARD_W / 2 - (dashed ? 24 : 0);
     const fy = (from.y ?? 0) + CARD_H;
-    const midY = dashed ? ty - VGAP / 4 : ty - VGAP / 2;
+    // Dashed lines run 6px below the solid bus — above the card labels,
+    // never through them.
+    const midY = dashed ? ty - VGAP / 2 + 6 : ty - VGAP / 2;
     // A couple card with the spouse's parents above splits its incoming
-    // lines: blood side enters left of center, in-law side right of center.
+    // lines: each line enters above the person it belongs to (the couple
+    // flips when their in-laws sit on the left).
+    const spouseSide = to.flip ? -1 : 1;
     const tx = dashed
-      ? to.x + (CARD_W * 3) / 4
-      : to.x + CARD_W / 2 - (to.node.parentsSpouse ? CARD_W / 4 : 0);
+      ? to.x + CARD_W / 2 + spouseSide * (CARD_W / 4)
+      : to.x +
+        CARD_W / 2 -
+        (to.node.parentsSpouse ? spouseSide * (CARD_W / 4) : 0);
     paths.push({ d: `M ${fx} ${fy} V ${midY} H ${tx} V ${ty}`, dashed });
   }
 
@@ -469,7 +515,9 @@ export default function FamilyTree() {
                 <Button size="sm" onClick={() => setPanel({ view: "addChild" })}>
                   <Plus className="h-4 w-4" /> Add child
                 </Button>
-                {!selected.parentsSelf && (
+                {/* Only offer to add parents when they aren't on the tree
+                    already — via an ancestor card or a normal parent card. */}
+                {!selected.parentsSelf && !selected.parent_id && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -577,7 +625,32 @@ function ChartCard({
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
-  const { node, x, y, label } = placed;
+  const { node, x, y, label, flip } = placed;
+  const primaryBadge = (
+    <PersonBadge
+      name={node.name}
+      years={yearLine(node.born_year, node.died_year)}
+      primary
+    />
+  );
+  const midSymbol = node.spouse_name ? (
+    node.divorced ? (
+      <span
+        aria-label="Divorced"
+        className="mt-4 shrink-0 rounded-full border border-paper-deep bg-paper-warm px-1.5 py-px text-[9px] font-medium lowercase leading-tight text-ink-faint"
+      >
+        div.
+      </span>
+    ) : (
+      <Heart className="mt-4 h-3.5 w-3.5 shrink-0 fill-accent text-accent" />
+    )
+  ) : null;
+  const spouseBadge = node.spouse_name ? (
+    <PersonBadge
+      name={node.spouse_name}
+      years={yearLine(node.spouse_born_year, node.spouse_died_year)}
+    />
+  ) : null;
   return (
     <>
       {label && (
@@ -596,27 +669,17 @@ function ChartCard({
         )}
         style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
       >
-        <PersonBadge
-          name={node.name}
-          years={yearLine(node.born_year, node.died_year)}
-          primary
-        />
-        {node.spouse_name && (
+        {flip ? (
           <>
-            {node.divorced ? (
-              <span
-                aria-label="Divorced"
-                className="mt-4 shrink-0 rounded-full border border-paper-deep bg-paper-warm px-1.5 py-px text-[9px] font-medium lowercase leading-tight text-ink-faint"
-              >
-                div.
-              </span>
-            ) : (
-              <Heart className="mt-4 h-3.5 w-3.5 shrink-0 fill-accent text-accent" />
-            )}
-            <PersonBadge
-              name={node.spouse_name}
-              years={yearLine(node.spouse_born_year, node.spouse_died_year)}
-            />
+            {spouseBadge}
+            {midSymbol}
+            {primaryBadge}
+          </>
+        ) : (
+          <>
+            {primaryBadge}
+            {midSymbol}
+            {spouseBadge}
           </>
         )}
       </button>
