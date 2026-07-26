@@ -6,11 +6,16 @@ export interface TreePerson {
   name: string;
   spouse_name: string | null;
   parent_id: string | null;
+  parents_of: string | null;
+  parents_side: "self" | "spouse";
   sort_index: number;
 }
 
 export interface TreeNode extends TreePerson {
   children: TreeNode[];
+  /** Ancestor cards floating above this one (e.g. "John's parents"). */
+  parentsSelf?: TreeNode;
+  parentsSpouse?: TreeNode;
 }
 
 function buildTree(rows: TreePerson[]): TreeNode[] {
@@ -19,6 +24,14 @@ function buildTree(rows: TreePerson[]): TreeNode[] {
   );
   const roots: TreeNode[] = [];
   for (const node of nodes.values()) {
+    if (node.parents_of) {
+      const target = nodes.get(node.parents_of);
+      if (target) {
+        if (node.parents_side === "spouse") target.parentsSpouse = node;
+        else target.parentsSelf = node;
+        continue;
+      }
+    }
     const parent = node.parent_id ? nodes.get(node.parent_id) : undefined;
     if (parent) parent.children.push(node);
     else roots.push(node);
@@ -35,7 +48,7 @@ export function useFamilyTree() {
     setError(null);
     const { data, error } = await supabase
       .from("tree_members")
-      .select("id, name, spouse_name, parent_id, sort_index")
+      .select("id, name, spouse_name, parent_id, parents_of, parents_side, sort_index")
       .order("sort_index")
       .order("name");
     if (error) return setError(error.message);
@@ -69,6 +82,26 @@ export function useFamilyTree() {
     [load]
   );
 
+  const addParents = useCallback(
+    async (
+      targetId: string,
+      side: "self" | "spouse",
+      name: string,
+      spouseName: string
+    ) => {
+      const { error } = await supabase.from("tree_members").insert({
+        name: name.trim(),
+        spouse_name: spouseName.trim() || null,
+        parents_of: targetId,
+        parents_side: side,
+        sort_index: side === "self" ? 1 : 2,
+      });
+      if (error) throw error;
+      await load();
+    },
+    [load]
+  );
+
   const updatePerson = useCallback(
     async (id: string, name: string, spouseName: string) => {
       const { error } = await supabase
@@ -84,7 +117,8 @@ export function useFamilyTree() {
     [load]
   );
 
-  // Deleting a person also deletes everyone below them (database cascade).
+  // Deleting a person also deletes everyone below them and their ancestor
+  // cards (database cascade).
   const removePerson = useCallback(
     async (id: string) => {
       const { error } = await supabase
@@ -97,5 +131,13 @@ export function useFamilyTree() {
     [load]
   );
 
-  return { roots, peopleCount, error, addChild, updatePerson, removePerson };
+  return {
+    roots,
+    peopleCount,
+    error,
+    addChild,
+    addParents,
+    updatePerson,
+    removePerson,
+  };
 }
