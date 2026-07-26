@@ -84,6 +84,37 @@ interface PendingEdge {
   kind: "child" | "spouseParents";
 }
 
+// A branch's outline: for each row it touches, how far left/right it reaches
+// (relative to the branch's own card center). Siblings pack against each
+// other's outlines so nobody drifts further apart than needed.
+type Extent = { l: number; r: number };
+type Shape = Map<number, Extent>;
+
+interface RelPlace {
+  node: TreeNode;
+  dx: number;
+  drow: number;
+  label?: string;
+}
+
+interface BranchLayout {
+  shape: Shape;
+  places: RelPlace[];
+  edges: PendingEdge[];
+}
+
+function mergeShape(target: Shape, src: Shape, dx: number, drow: number) {
+  for (const [row, ext] of src) {
+    const nr = row + drow;
+    const moved = { l: ext.l + dx, r: ext.r + dx };
+    const cur = target.get(nr);
+    target.set(
+      nr,
+      cur ? { l: Math.min(cur.l, moved.l), r: Math.max(cur.r, moved.r) } : moved
+    );
+  }
+}
+
 /**
  * "X's parents" cards on the blood side become real top-level parents (so
  * siblings like Robert can hang off them); the spouse's parents stay
@@ -104,79 +135,105 @@ function hoist(n: TreeNode): TreeNode {
   return cur;
 }
 
+/**
+ * Lay out one branch: the card itself, its packed children below, and (for
+ * a couple whose spouse has parent cards) the in-law branch above-right.
+ * Everything is relative to this branch's card center.
+ */
+function layoutBranch(n: TreeNode): BranchLayout {
+  const kids = n.children.map(layoutBranch);
+
+  // Pack siblings left-to-right: each slides left until its outline is one
+  // gap away from everything already placed, at the closest row.
+  const packed: Shape = new Map();
+  const offsets: number[] = [];
+  kids.forEach((k, i) => {
+    let dx = 0;
+    if (i > 0) {
+      dx = -Infinity;
+      for (const [row, ext] of k.shape) {
+        const m = packed.get(row);
+        if (m) dx = Math.max(dx, m.r + HGAP - ext.l);
+      }
+      if (dx === -Infinity) {
+        const maxR = Math.max(...[...packed.values()].map((e) => e.r));
+        const minL = Math.min(...[...k.shape.values()].map((e) => e.l));
+        dx = maxR + HGAP - minL;
+      }
+    }
+    offsets.push(dx);
+    mergeShape(packed, k.shape, dx, 0);
+  });
+
+  // Center the card over its children, unless a grandchild's in-law card
+  // occupies this row — then slide left of it.
+  let cx = kids.length ? (offsets[0] + offsets[offsets.length - 1]) / 2 : 0;
+  const claimed = packed.get(-1);
+  if (claimed && cx + CARD_W / 2 + HGAP > claimed.l && cx - CARD_W / 2 < claimed.r) {
+    cx = claimed.l - HGAP - CARD_W / 2;
+  }
+
+  const shape: Shape = new Map([[0, { l: -CARD_W / 2, r: CARD_W / 2 }]]);
+  mergeShape(shape, packed, -cx, 1);
+
+  const places: RelPlace[] = [{ node: n, dx: 0, drow: 0 }];
+  const edges: PendingEdge[] = [];
+  kids.forEach((k, i) => {
+    edges.push({ fromId: n.id, toId: n.children[i].id, kind: "child" });
+    edges.push(...k.edges);
+    for (const p of k.places) {
+      places.push({ ...p, dx: p.dx + offsets[i] - cx, drow: p.drow + 1 });
+    }
+  });
+
+  // The spouse's parents (and any branch hanging off them, e.g. the
+  // spouse's siblings) sit above-right of this card.
+  if (n.parentsSpouse && n.spouse_name) {
+    const inLaws = layoutBranch(n.parentsSpouse);
+    let dxSp = CARD_W + HGAP;
+    for (const [row, ext] of inLaws.shape) {
+      const m = shape.get(row - 1);
+      if (m) dxSp = Math.max(dxSp, m.r + HGAP - ext.l);
+    }
+    mergeShape(shape, inLaws.shape, dxSp, -1);
+    for (const p of inLaws.places) {
+      places.push({
+        ...p,
+        dx: p.dx + dxSp,
+        drow: p.drow - 1,
+        label:
+          p.node.id === n.parentsSpouse.id
+            ? `${firstName(n.spouse_name)}'s parents`
+            : p.label,
+      });
+    }
+    edges.push(...inLaws.edges);
+    edges.push({ fromId: n.parentsSpouse.id, toId: n.id, kind: "spouseParents" });
+  }
+
+  return { shape, places, edges };
+}
+
 function layoutChart(roots: TreeNode[]) {
   const displayRoots = roots.map(hoist);
   const cards: PlacedCard[] = [];
   const edges: PendingEdge[] = [];
-  const widths = new Map<string, number>();
-
-  const width = (n: TreeNode): number => {
-    const cached = widths.get(n.id);
-    if (cached !== undefined) return cached;
-    const kidsW =
-      n.children.reduce((s, c) => s + width(c), 0) +
-      HGAP * Math.max(0, n.children.length - 1);
-    const bloodW = Math.max(CARD_W, kidsW);
-    const w = bloodW + (n.parentsSpouse ? CARD_W + HGAP : 0);
-    widths.set(n.id, w);
-    return w;
-  };
-
-  const place = (n: TreeNode, left: number, row: number) => {
-    const kidsW =
-      n.children.reduce((s, c) => s + width(c), 0) +
-      HGAP * Math.max(0, n.children.length - 1);
-    const bloodW = Math.max(CARD_W, kidsW);
-    const x = left + bloodW / 2 - CARD_W / 2;
-    cards.push({ node: n, x, row });
-
-    if (n.parentsSpouse && n.spouse_name) {
-      cards.push({
-        node: n.parentsSpouse,
-        x: x + CARD_W + HGAP,
-        row: row - 1,
-        label: `${firstName(n.spouse_name)}'s parents`,
-      });
-      edges.push({ fromId: n.parentsSpouse.id, toId: n.id, kind: "spouseParents" });
-    }
-
-    let childLeft = left + Math.max(0, (bloodW - kidsW) / 2);
-    for (const c of n.children) {
-      edges.push({ fromId: n.id, toId: c.id, kind: "child" });
-      place(c, childLeft, row + 1);
-      childLeft += width(c) + HGAP;
-    }
-  };
 
   let cursor = 0;
   for (const r of displayRoots) {
-    place(r, cursor, 0);
-    cursor += width(r) + HGAP * 2;
-  }
-
-  // Resolve overlaps within a row: spouse-parent cards keep their slot and
-  // everything else slides out of the way.
-  const byRow = new Map<number, PlacedCard[]>();
-  for (const c of cards) (byRow.get(c.row) ?? byRow.set(c.row, []).get(c.row)!).push(c);
-  for (const rowCards of byRow.values()) {
-    rowCards.sort((a, b) => a.x - b.x);
-    for (let i = 1; i < rowCards.length; i++) {
-      const prev = rowCards[i - 1];
-      const cur = rowCards[i];
-      if (cur.x < prev.x + CARD_W + 8) {
-        if (cur.label) {
-          // Fixed card: push the earlier one left instead.
-          prev.x = cur.x - CARD_W - HGAP;
-          for (let j = i - 2; j >= 0; j--) {
-            if (rowCards[j].x > rowCards[j + 1].x - CARD_W - 8) {
-              rowCards[j].x = rowCards[j + 1].x - CARD_W - HGAP;
-            }
-          }
-        } else {
-          cur.x = prev.x + CARD_W + HGAP;
-        }
-      }
+    const branch = layoutBranch(r);
+    const minL = Math.min(...[...branch.shape.values()].map((e) => e.l));
+    const maxR = Math.max(...[...branch.shape.values()].map((e) => e.r));
+    for (const p of branch.places) {
+      cards.push({
+        node: p.node,
+        x: cursor + (p.dx - minL) - CARD_W / 2,
+        row: p.drow,
+        label: p.label,
+      });
     }
+    edges.push(...branch.edges);
+    cursor += maxR - minL + HGAP * 2;
   }
 
   // Normalize coordinates to start at the padding edge.
