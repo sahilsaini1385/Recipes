@@ -1,15 +1,24 @@
 import { Link, useLocation } from "react-router-dom";
-import { ChefHat, Plane } from "lucide-react";
+import { ChefHat, Plane, TreeDeciduous } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { to: "/", label: "Recipes", icon: ChefHat },
   { to: "/passport", label: "Passport", icon: Plane },
+  { to: "/tree", label: "Tree", icon: TreeDeciduous },
 ] as const;
+
+/** Which section a path belongs to (recipes is the catch-all). */
+export function sectionFor(pathname: string): string {
+  if (pathname.startsWith("/passport")) return "/passport";
+  if (pathname.startsWith("/tree")) return "/tree";
+  return "/";
+}
 
 /** App-style tab bar, phones only — larger screens get links in the header. */
 export function BottomNav() {
   const { pathname } = useLocation();
+  const section = sectionFor(pathname);
 
   return (
     <nav
@@ -18,10 +27,7 @@ export function BottomNav() {
     >
       <div className="mx-auto flex h-16 max-w-3xl items-stretch">
         {TABS.map(({ to, label, icon: Icon }) => {
-          const active =
-            to === "/passport"
-              ? pathname.startsWith("/passport")
-              : !pathname.startsWith("/passport");
+          const active = to === section;
           return (
             <Link
               key={to}

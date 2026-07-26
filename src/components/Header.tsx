@@ -1,14 +1,21 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Plus, LogOut, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { sectionFor } from "@/components/BottomNav";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
+
+const SECTION_LABELS: Record<string, string> = {
+  "/": "Recipes",
+  "/passport": "Passport",
+  "/tree": "Family Tree",
+};
 
 export function Header() {
   const { session, isFamily, signOut } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const inPassport = pathname.startsWith("/passport");
+  const section = sectionFor(pathname);
 
   return (
     <header className="sticky top-0 z-20 border-b border-paper-deep/70 bg-paper/90 backdrop-blur-md">
@@ -21,25 +28,20 @@ export function Header() {
             <span className="font-serif text-lg font-semibold leading-tight text-ink">
               Jungman Family
               <span className="block text-xs font-normal uppercase tracking-widest text-accent">
-                {inPassport ? "Passport" : "Recipes"}
+                {SECTION_LABELS[section]}
               </span>
             </span>
           </Link>
           {/* Larger screens navigate here; phones use the bottom tab bar. */}
           <nav className="hidden items-center gap-1 sm:flex">
-            {(
-              [
-                ["/", "Recipes", !inPassport],
-                ["/passport", "Passport", inPassport],
-              ] as const
-            ).map(([to, label, active]) => (
+            {Object.entries(SECTION_LABELS).map(([to, label]) => (
               <Link
                 key={to}
                 to={to}
-                aria-current={active ? "page" : undefined}
+                aria-current={to === section ? "page" : undefined}
                 className={cn(
                   "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-                  active
+                  to === section
                     ? "bg-accent/10 text-accent-dark"
                     : "text-ink-soft hover:bg-paper-warm hover:text-ink"
                 )}
@@ -50,7 +52,7 @@ export function Header() {
           </nav>
         </div>
         <div className="flex items-center gap-1">
-          {isFamily && !inPassport && (
+          {isFamily && section === "/" && (
             <Button size="sm" onClick={() => navigate("/add")}>
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add recipe</span>

@@ -8,6 +8,7 @@ import AddRecipe from "@/pages/AddRecipe";
 import EditRecipe from "@/pages/EditRecipe";
 import SignIn from "@/pages/SignIn";
 import Passport from "@/pages/Passport";
+import FamilyTree from "@/pages/FamilyTree";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
 function SetupNotice() {
@@ -27,7 +28,11 @@ export default function App() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    const section = pathname.startsWith("/passport") ? "Passport" : "Recipes";
+    const section = pathname.startsWith("/passport")
+      ? "Passport"
+      : pathname.startsWith("/tree")
+        ? "Family Tree"
+        : "Recipes";
     document.title = `Jungman Family · ${section}`;
   }, [pathname]);
 
@@ -43,6 +48,7 @@ export default function App() {
         <Route path="/add" element={<AddRecipe />} />
         <Route path="/edit/:slug" element={<EditRecipe />} />
         <Route path="/passport" element={<Passport />} />
+        <Route path="/tree" element={<FamilyTree />} />
         <Route path="/signin" element={<SignIn />} />
       </Routes>
       <BottomNav />
