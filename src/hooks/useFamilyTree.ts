@@ -13,6 +13,7 @@ export interface TreePerson {
   died_year: number | null;
   spouse_born_year: number | null;
   spouse_died_year: number | null;
+  divorced: boolean;
 }
 
 export interface TreeNode extends TreePerson {
@@ -30,6 +31,7 @@ export interface PersonDetails {
   died: string;
   spouseBorn: string;
   spouseDied: string;
+  divorced: boolean;
 }
 
 function yearOrNull(raw: string): number | null {
@@ -45,6 +47,7 @@ function detailColumns(d: PersonDetails) {
     died_year: yearOrNull(d.died),
     spouse_born_year: yearOrNull(d.spouseBorn),
     spouse_died_year: yearOrNull(d.spouseDied),
+    divorced: d.divorced && !!d.spouse.trim(),
   };
 }
 
@@ -76,15 +79,28 @@ export function useFamilyTree() {
 
   const load = useCallback(async () => {
     setError(null);
-    const { data, error } = await supabase
+    let res = await supabase
       .from("tree_members")
       .select(
-        "id, name, spouse_name, parent_id, parents_of, parents_side, sort_index, born_year, died_year, spouse_born_year, spouse_died_year"
+        "id, name, spouse_name, parent_id, parents_of, parents_side, sort_index, born_year, died_year, spouse_born_year, spouse_died_year, divorced"
       )
       .order("sort_index")
       .order("name");
+    if (res.error && /divorced/.test(res.error.message)) {
+      // The divorced column's migration hasn't been run yet — load without it.
+      res = (await supabase
+        .from("tree_members")
+        .select(
+          "id, name, spouse_name, parent_id, parents_of, parents_side, sort_index, born_year, died_year, spouse_born_year, spouse_died_year"
+        )
+        .order("sort_index")
+        .order("name")) as typeof res;
+    }
+    const { data, error } = res;
     if (error) return setError(error.message);
-    const rows = (data ?? []) as TreePerson[];
+    const rows = ((data ?? []) as Array<Omit<TreePerson, "divorced"> & { divorced?: boolean }>).map(
+      (r) => ({ ...r, divorced: r.divorced ?? false })
+    ) as TreePerson[];
     setRoots(buildTree(rows));
     setPeopleCount(
       rows.length + rows.filter((r) => r.spouse_name?.trim()).length

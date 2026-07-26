@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { TreeDeciduous, Heart, Plus, Pencil, Trash2, X } from "lucide-react";
+import {
+  TreeDeciduous,
+  Heart,
+  HeartOff,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -449,6 +457,11 @@ export default function FamilyTree() {
               <p className="font-serif text-lg font-medium text-ink">
                 {selected.name}
                 {selected.spouse_name ? ` & ${selected.spouse_name}` : ""}
+                {selected.divorced && (
+                  <span className="ml-1.5 text-sm font-normal text-ink-faint">
+                    (divorced)
+                  </span>
+                )}
               </p>
               <button
                 aria-label="Close"
@@ -598,7 +611,14 @@ function ChartCard({
         />
         {node.spouse_name && (
           <>
-            <Heart className="mt-4 h-3.5 w-3.5 shrink-0 fill-accent text-accent" />
+            {node.divorced ? (
+              <HeartOff
+                aria-label="Divorced"
+                className="mt-4 h-3.5 w-3.5 shrink-0 text-ink-faint"
+              />
+            ) : (
+              <Heart className="mt-4 h-3.5 w-3.5 shrink-0 fill-accent text-accent" />
+            )}
             <PersonBadge
               name={node.spouse_name}
               years={yearLine(node.spouse_born_year, node.spouse_died_year)}
@@ -655,6 +675,7 @@ function PersonForm({
     died_year: number | null;
     spouse_born_year: number | null;
     spouse_died_year: number | null;
+    divorced: boolean;
   };
   onSave: (details: PersonDetails) => Promise<void>;
   onCancel: () => void;
@@ -666,6 +687,7 @@ function PersonForm({
     died: initial?.died_year?.toString() ?? "",
     spouseBorn: initial?.spouse_born_year?.toString() ?? "",
     spouseDied: initial?.spouse_died_year?.toString() ?? "",
+    divorced: initial?.divorced ?? false,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -738,6 +760,19 @@ function PersonForm({
         <p className="text-xs text-ink-faint">
           Years are optional — leave "Died" blank for anyone living.
         </p>
+        {details.spouse.trim() && (
+          <label className="flex items-center gap-2 text-sm text-ink-soft">
+            <input
+              type="checkbox"
+              checked={details.divorced}
+              onChange={(e) =>
+                setDetails((d) => ({ ...d, divorced: e.target.checked }))
+              }
+              className="h-4 w-4 accent-accent"
+            />
+            Divorced or separated (shown with a muted, slashed heart)
+          </label>
+        )}
         <div className="flex gap-2">
           <Button
             size="sm"
