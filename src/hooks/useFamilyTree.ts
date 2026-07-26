@@ -9,6 +9,10 @@ export interface TreePerson {
   parents_of: string | null;
   parents_side: "self" | "spouse";
   sort_index: number;
+  born_year: number | null;
+  died_year: number | null;
+  spouse_born_year: number | null;
+  spouse_died_year: number | null;
 }
 
 export interface TreeNode extends TreePerson {
@@ -16,6 +20,32 @@ export interface TreeNode extends TreePerson {
   /** Ancestor cards floating above this one (e.g. "John's parents"). */
   parentsSelf?: TreeNode;
   parentsSpouse?: TreeNode;
+}
+
+/** What the add/edit forms collect; empty strings mean "not set". */
+export interface PersonDetails {
+  name: string;
+  spouse: string;
+  born: string;
+  died: string;
+  spouseBorn: string;
+  spouseDied: string;
+}
+
+function yearOrNull(raw: string): number | null {
+  const n = parseInt(raw.trim(), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function detailColumns(d: PersonDetails) {
+  return {
+    name: d.name.trim(),
+    spouse_name: d.spouse.trim() || null,
+    born_year: yearOrNull(d.born),
+    died_year: yearOrNull(d.died),
+    spouse_born_year: yearOrNull(d.spouseBorn),
+    spouse_died_year: yearOrNull(d.spouseDied),
+  };
 }
 
 function buildTree(rows: TreePerson[]): TreeNode[] {
@@ -48,7 +78,9 @@ export function useFamilyTree() {
     setError(null);
     const { data, error } = await supabase
       .from("tree_members")
-      .select("id, name, spouse_name, parent_id, parents_of, parents_side, sort_index")
+      .select(
+        "id, name, spouse_name, parent_id, parents_of, parents_side, sort_index, born_year, died_year, spouse_born_year, spouse_died_year"
+      )
       .order("sort_index")
       .order("name");
     if (error) return setError(error.message);
@@ -66,13 +98,11 @@ export function useFamilyTree() {
   const addChild = useCallback(
     async (
       parentId: string | null,
-      name: string,
-      spouseName: string,
+      details: PersonDetails,
       siblingCount: number
     ) => {
       const { error } = await supabase.from("tree_members").insert({
-        name: name.trim(),
-        spouse_name: spouseName.trim() || null,
+        ...detailColumns(details),
         parent_id: parentId,
         sort_index: siblingCount + 1,
       });
@@ -83,15 +113,9 @@ export function useFamilyTree() {
   );
 
   const addParents = useCallback(
-    async (
-      targetId: string,
-      side: "self" | "spouse",
-      name: string,
-      spouseName: string
-    ) => {
+    async (targetId: string, side: "self" | "spouse", details: PersonDetails) => {
       const { error } = await supabase.from("tree_members").insert({
-        name: name.trim(),
-        spouse_name: spouseName.trim() || null,
+        ...detailColumns(details),
         parents_of: targetId,
         parents_side: side,
         sort_index: side === "self" ? 1 : 2,
@@ -103,13 +127,10 @@ export function useFamilyTree() {
   );
 
   const updatePerson = useCallback(
-    async (id: string, name: string, spouseName: string) => {
+    async (id: string, details: PersonDetails) => {
       const { error } = await supabase
         .from("tree_members")
-        .update({
-          name: name.trim(),
-          spouse_name: spouseName.trim() || null,
-        })
+        .update(detailColumns(details))
         .eq("id", id);
       if (error) throw error;
       await load();

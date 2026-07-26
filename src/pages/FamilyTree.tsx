@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TreeDeciduous, Heart, Plus, Pencil, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
-import { useFamilyTree, type TreeNode } from "@/hooks/useFamilyTree";
+import {
+  useFamilyTree,
+  type TreeNode,
+  type PersonDetails,
+} from "@/hooks/useFamilyTree";
 import { cn } from "@/lib/utils";
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
@@ -13,9 +17,17 @@ const initials = (name: string) =>
   name
     .trim()
     .split(/\s+/)
+    .filter((w) => /[\p{L}\p{N}]/u.test(w))
     .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
+    .map((w) => (w.match(/[\p{L}\p{N}]/u) ?? [""])[0].toUpperCase())
     .join("");
+
+function yearLine(born: number | null, died: number | null): string {
+  if (born && died) return `${born}–${died}`;
+  if (born) return `b. ${born}`;
+  if (died) return `d. ${died}`;
+  return "";
+}
 
 /** Everyone on this card, below it, and on its ancestor cards. */
 function countAll(node: TreeNode): number {
@@ -46,6 +58,164 @@ function ancestorDepth(nodes: TreeNode[]): number {
   return deepest;
 }
 
+// ---------------------------------------------------------------------------
+// Chart layout. Cards are one fixed size; positions are computed, and the
+// connecting lines are drawn as exact SVG elbows so they always join up.
+// ---------------------------------------------------------------------------
+
+const CARD_W = 200;
+const CARD_H = 118;
+const HGAP = 28;
+const VGAP = 56;
+const PAD = 24;
+const LABEL_H = 18;
+
+interface PlacedCard {
+  node: TreeNode;
+  x: number; // left, px
+  row: number;
+  y?: number; // top, px (filled in after rows are normalized)
+  label?: string;
+}
+
+interface PendingEdge {
+  fromId: string;
+  toId: string;
+  kind: "child" | "spouseParents";
+}
+
+/**
+ * "X's parents" cards on the blood side become real top-level parents (so
+ * siblings like Robert can hang off them); the spouse's parents stay
+ * attached and render above the spouse's half of the couple card.
+ */
+function hoist(n: TreeNode): TreeNode {
+  let cur: TreeNode = { ...n, children: n.children.map(hoist) };
+  while (cur.parentsSelf) {
+    const p = cur.parentsSelf;
+    cur = {
+      ...p,
+      children: [
+        ...p.children.map(hoist),
+        { ...cur, parentsSelf: undefined },
+      ],
+    };
+  }
+  return cur;
+}
+
+function layoutChart(roots: TreeNode[]) {
+  const displayRoots = roots.map(hoist);
+  const cards: PlacedCard[] = [];
+  const edges: PendingEdge[] = [];
+  const widths = new Map<string, number>();
+
+  const width = (n: TreeNode): number => {
+    const cached = widths.get(n.id);
+    if (cached !== undefined) return cached;
+    const kidsW =
+      n.children.reduce((s, c) => s + width(c), 0) +
+      HGAP * Math.max(0, n.children.length - 1);
+    const bloodW = Math.max(CARD_W, kidsW);
+    const w = bloodW + (n.parentsSpouse ? CARD_W + HGAP : 0);
+    widths.set(n.id, w);
+    return w;
+  };
+
+  const place = (n: TreeNode, left: number, row: number) => {
+    const kidsW =
+      n.children.reduce((s, c) => s + width(c), 0) +
+      HGAP * Math.max(0, n.children.length - 1);
+    const bloodW = Math.max(CARD_W, kidsW);
+    const x = left + bloodW / 2 - CARD_W / 2;
+    cards.push({ node: n, x, row });
+
+    if (n.parentsSpouse && n.spouse_name) {
+      cards.push({
+        node: n.parentsSpouse,
+        x: x + CARD_W + HGAP,
+        row: row - 1,
+        label: `${firstName(n.spouse_name)}'s parents`,
+      });
+      edges.push({ fromId: n.parentsSpouse.id, toId: n.id, kind: "spouseParents" });
+    }
+
+    let childLeft = left + Math.max(0, (bloodW - kidsW) / 2);
+    for (const c of n.children) {
+      edges.push({ fromId: n.id, toId: c.id, kind: "child" });
+      place(c, childLeft, row + 1);
+      childLeft += width(c) + HGAP;
+    }
+  };
+
+  let cursor = 0;
+  for (const r of displayRoots) {
+    place(r, cursor, 0);
+    cursor += width(r) + HGAP * 2;
+  }
+
+  // Resolve overlaps within a row: spouse-parent cards keep their slot and
+  // everything else slides out of the way.
+  const byRow = new Map<number, PlacedCard[]>();
+  for (const c of cards) (byRow.get(c.row) ?? byRow.set(c.row, []).get(c.row)!).push(c);
+  for (const rowCards of byRow.values()) {
+    rowCards.sort((a, b) => a.x - b.x);
+    for (let i = 1; i < rowCards.length; i++) {
+      const prev = rowCards[i - 1];
+      const cur = rowCards[i];
+      if (cur.x < prev.x + CARD_W + 8) {
+        if (cur.label) {
+          // Fixed card: push the earlier one left instead.
+          prev.x = cur.x - CARD_W - HGAP;
+          for (let j = i - 2; j >= 0; j--) {
+            if (rowCards[j].x > rowCards[j + 1].x - CARD_W - 8) {
+              rowCards[j].x = rowCards[j + 1].x - CARD_W - HGAP;
+            }
+          }
+        } else {
+          cur.x = prev.x + CARD_W + HGAP;
+        }
+      }
+    }
+  }
+
+  // Normalize coordinates to start at the padding edge.
+  const minRow = Math.min(...cards.map((c) => c.row));
+  const minX = Math.min(...cards.map((c) => c.x));
+  const rowHeight = CARD_H + VGAP;
+  for (const c of cards) {
+    c.x += PAD - minX;
+    c.y = PAD + LABEL_H + (c.row - minRow) * rowHeight;
+  }
+  const chartW = Math.max(...cards.map((c) => c.x)) + CARD_W + PAD;
+  const chartH =
+    Math.max(...cards.map((c) => c.y ?? 0)) + CARD_H + PAD;
+
+  // Turn edges into SVG elbow paths from the final positions.
+  const byId = new Map(cards.map((c) => [c.node.id, c]));
+  const paths: string[] = [];
+  for (const e of edges) {
+    const from = byId.get(e.fromId);
+    const to = byId.get(e.toId);
+    if (!from || !to) continue;
+    const fx = from.x + CARD_W / 2;
+    const fy = (from.y ?? 0) + CARD_H;
+    const ty = to.y ?? 0;
+    const midY = ty - VGAP / 2;
+    // A couple card with the spouse's parents above splits its incoming
+    // lines: blood side enters left of center, in-law side right of center.
+    const tx =
+      e.kind === "spouseParents"
+        ? to.x + (CARD_W * 3) / 4
+        : to.x + CARD_W / 2 - (to.node.parentsSpouse ? CARD_W / 4 : 0);
+    paths.push(`M ${fx} ${fy} V ${midY} H ${tx} V ${ty}`);
+  }
+
+  return { cards, paths, chartW, chartH };
+}
+
+// ---------------------------------------------------------------------------
+
 type PanelState =
   | { view: "actions" }
   | { view: "addChild" }
@@ -68,13 +238,16 @@ export default function FamilyTree() {
   const [addingRoot, setAddingRoot] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
+  const chart = useMemo(
+    () => (roots && roots.length > 0 ? layoutChart(roots) : null),
+    [roots]
+  );
+
   // Start the chart horizontally centered (it can be wider than a phone).
   useEffect(() => {
     const el = scrollerRef.current;
-    if (el && roots && roots.length > 0) {
-      el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
-    }
-  }, [roots]);
+    if (el && chart) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+  }, [chart]);
 
   // Find the selected node anywhere in the tree (children or ancestors).
   const findNode = (nodes: TreeNode[], id: string): TreeNode | null => {
@@ -90,8 +263,7 @@ export default function FamilyTree() {
     }
     return null;
   };
-  const selected =
-    roots && selectedId ? findNode(roots, selectedId) : null;
+  const selected = roots && selectedId ? findNode(roots, selectedId) : null;
 
   const select = (id: string) => {
     if (!isFamily) return;
@@ -107,10 +279,7 @@ export default function FamilyTree() {
 
   return (
     <main
-      className={cn(
-        "mx-auto max-w-3xl px-4 pt-5",
-        selected ? "pb-64" : "pb-16"
-      )}
+      className={cn("mx-auto max-w-3xl px-4 pt-5", selected ? "pb-72" : "pb-16")}
     >
       <div className="mb-4 rounded-2xl bg-gradient-to-br from-accent to-accent-dark p-5 text-white shadow-card">
         <div className="flex items-center gap-2">
@@ -134,18 +303,37 @@ export default function FamilyTree() {
       {error && <p className="mb-4 text-sm text-red-700">{error}</p>}
       {!roots && !error && <p className="text-center text-ink-soft">Loading…</p>}
 
-      {roots && roots.length > 0 && (
+      {chart && (
         <>
           <div
             ref={scrollerRef}
             className="overflow-x-auto rounded-2xl border border-paper-deep/70 bg-paper-warm/60 shadow-card"
           >
-            <div className="min-w-max px-6 py-8">
-              {roots.map((node) => (
-                <Branch
-                  key={node.id}
-                  node={node}
-                  selectedId={selectedId}
+            <div
+              className="relative"
+              style={{ width: chart.chartW, height: chart.chartH }}
+            >
+              <svg
+                className="absolute inset-0"
+                width={chart.chartW}
+                height={chart.chartH}
+                aria-hidden
+              >
+                {chart.paths.map((d, i) => (
+                  <path
+                    key={i}
+                    d={d}
+                    fill="none"
+                    stroke="#d8c5a5"
+                    strokeWidth="1.5"
+                  />
+                ))}
+              </svg>
+              {chart.cards.map((c) => (
+                <ChartCard
+                  key={c.node.id}
+                  placed={c}
+                  selected={selectedId === c.node.id}
                   onSelect={select}
                 />
               ))}
@@ -168,8 +356,8 @@ export default function FamilyTree() {
           {addingRoot ? (
             <PersonForm
               title="First person"
-              onSave={async (name, spouse) => {
-                await addChild(null, name, spouse, 0);
+              onSave={async (details) => {
+                await addChild(null, details, 0);
                 setAddingRoot(false);
               }}
               onCancel={() => setAddingRoot(false)}
@@ -190,15 +378,10 @@ export default function FamilyTree() {
         <div className="fixed inset-x-0 bottom-16 z-20 px-3 pb-2 sm:bottom-0 sm:pb-4">
           <Card className="mx-auto max-w-xl border-paper-deep p-4 shadow-card-hover">
             <div className="mb-3 flex items-start justify-between gap-2">
-              <div>
-                <p className="font-serif text-lg font-medium text-ink">
-                  {selected.name}
-                  {selected.spouse_name ? ` & ${selected.spouse_name}` : ""}
-                </p>
-                {selected.parents_of && (
-                  <p className="text-xs text-ink-faint">Ancestor card</p>
-                )}
-              </div>
+              <p className="font-serif text-lg font-medium text-ink">
+                {selected.name}
+                {selected.spouse_name ? ` & ${selected.spouse_name}` : ""}
+              </p>
               <button
                 aria-label="Close"
                 onClick={close}
@@ -210,10 +393,7 @@ export default function FamilyTree() {
 
             {panel.view === "actions" && (
               <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => setPanel({ view: "addChild" })}
-                >
+                <Button size="sm" onClick={() => setPanel({ view: "addChild" })}>
                   <Plus className="h-4 w-4" /> Add child
                 </Button>
                 {!selected.parentsSelf && (
@@ -250,13 +430,17 @@ export default function FamilyTree() {
                   variant="outline"
                   className="text-red-700"
                   onClick={() => {
-                    const others = countAll(selected) - 1 -
+                    const others =
+                      countAll(selected) -
+                      1 -
                       (selected.spouse_name?.trim() ? 1 : 0);
                     const extra =
                       others > 0
                         ? ` Their whole branch (${others} more ${others === 1 ? "person" : "people"}) goes too.`
                         : "";
-                    if (confirm(`Remove ${selected.name} from the tree?${extra}`)) {
+                    if (
+                      confirm(`Remove ${selected.name} from the tree?${extra}`)
+                    ) {
                       removePerson(selected.id);
                       close();
                     }
@@ -270,13 +454,8 @@ export default function FamilyTree() {
             {panel.view === "addChild" && (
               <PersonForm
                 title={`Child of ${selected.name}${selected.spouse_name ? ` & ${selected.spouse_name}` : ""}`}
-                onSave={async (name, spouse) => {
-                  await addChild(
-                    selected.id,
-                    name,
-                    spouse,
-                    selected.children.length
-                  );
+                onSave={async (details) => {
+                  await addChild(selected.id, details, selected.children.length);
                   close();
                 }}
                 onCancel={() => setPanel({ view: "actions" })}
@@ -290,8 +469,8 @@ export default function FamilyTree() {
                     ? firstName(selected.spouse_name)
                     : firstName(selected.name)
                 }`}
-                onSave={async (name, spouse) => {
-                  await addParents(selected.id, panel.side, name, spouse);
+                onSave={async (details) => {
+                  await addParents(selected.id, panel.side, details);
                   close();
                 }}
                 onCancel={() => setPanel({ view: "actions" })}
@@ -301,10 +480,9 @@ export default function FamilyTree() {
             {panel.view === "edit" && (
               <PersonForm
                 title="Edit"
-                initialName={selected.name}
-                initialSpouse={selected.spouse_name ?? ""}
-                onSave={async (name, spouse) => {
-                  await updatePerson(selected.id, name, spouse);
+                initial={selected}
+                onSave={async (details) => {
+                  await updatePerson(selected.id, details);
                   close();
                 }}
                 onCancel={() => setPanel({ view: "actions" })}
@@ -317,137 +495,67 @@ export default function FamilyTree() {
   );
 }
 
-/** A card plus any ancestor cards stacked above it, with connector lines. */
-function CardWithAncestors({
-  node,
-  label,
-  selectedId,
-  onSelect,
-}: {
-  node: TreeNode;
-  label?: string;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  const ancestors = [
-    node.parentsSelf && {
-      node: node.parentsSelf,
-      label: `${firstName(node.name)}'s parents`,
-    },
-    node.parentsSpouse &&
-      node.spouse_name && {
-        node: node.parentsSpouse,
-        label: `${firstName(node.spouse_name)}'s parents`,
-      },
-  ].filter(Boolean) as Array<{ node: TreeNode; label: string }>;
-
-  return (
-    <div className="tree-branch">
-      {ancestors.length > 0 && (
-        <div className="tree-children">
-          {ancestors.map(({ node: a, label: l }) => (
-            <div key={a.id} className="tree-parent">
-              <CardWithAncestors
-                node={a}
-                label={l}
-                selectedId={selectedId}
-                onSelect={onSelect}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-      <CoupleCard
-        node={node}
-        label={label}
-        selected={selectedId === node.id}
-        onSelect={onSelect}
-      />
-    </div>
-  );
-}
-
-function Branch({
-  node,
-  selectedId,
-  onSelect,
-}: {
-  node: TreeNode;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="tree-branch">
-      <CardWithAncestors
-        node={node}
-        selectedId={selectedId}
-        onSelect={onSelect}
-      />
-      {node.children.length > 0 && (
-        <>
-          <div className="tree-down" />
-          <div className="tree-children">
-            {node.children.map((child) => (
-              <div key={child.id} className="tree-child">
-                <Branch
-                  node={child}
-                  selectedId={selectedId}
-                  onSelect={onSelect}
-                />
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function CoupleCard({
-  node,
-  label,
+function ChartCard({
+  placed,
   selected,
   onSelect,
 }: {
-  node: TreeNode;
-  label?: string;
+  placed: PlacedCard;
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
+  const { node, x, y, label } = placed;
   return (
-    <div className="flex flex-col items-center">
+    <>
       {label && (
-        <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-ink-faint">
+        <p
+          className="absolute text-center text-[10px] font-medium uppercase tracking-wide text-ink-faint"
+          style={{ left: x, top: (y ?? 0) - LABEL_H, width: CARD_W }}
+        >
           {label}
         </p>
       )}
       <button
         onClick={() => onSelect(node.id)}
         className={cn(
-          "flex items-center gap-1 rounded-2xl border bg-white px-3 py-2.5 text-left shadow-card transition-shadow hover:shadow-card-hover",
-          selected
-            ? "border-accent ring-2 ring-accent/40"
-            : "border-paper-deep/60"
+          "absolute flex items-start justify-center gap-1 rounded-2xl border bg-white px-2 pt-2.5 text-left shadow-card transition-shadow hover:shadow-card-hover",
+          selected ? "border-accent ring-2 ring-accent/40" : "border-paper-deep/60"
         )}
+        style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
       >
-        <PersonBadge name={node.name} primary />
+        <PersonBadge
+          name={node.name}
+          years={yearLine(node.born_year, node.died_year)}
+          primary
+        />
         {node.spouse_name && (
           <>
-            <Heart className="mx-0.5 h-3.5 w-3.5 shrink-0 fill-accent text-accent" />
-            <PersonBadge name={node.spouse_name} />
+            <Heart className="mt-4 h-3.5 w-3.5 shrink-0 fill-accent text-accent" />
+            <PersonBadge
+              name={node.spouse_name}
+              years={yearLine(node.spouse_born_year, node.spouse_died_year)}
+            />
           </>
         )}
       </button>
-    </div>
+    </>
   );
 }
 
-function PersonBadge({ name, primary }: { name: string; primary?: boolean }) {
+function PersonBadge({
+  name,
+  years,
+  primary,
+}: {
+  name: string;
+  years: string;
+  primary?: boolean;
+}) {
   return (
-    <span className="flex w-24 flex-col items-center gap-1">
+    <span className="flex w-[84px] flex-col items-center gap-1">
       <span
         className={cn(
-          "flex h-11 w-11 items-center justify-center rounded-full font-serif text-sm font-semibold shadow-sm",
+          "flex h-10 w-10 items-center justify-center rounded-full font-serif text-sm font-semibold shadow-sm",
           primary
             ? "bg-gradient-to-br from-accent to-accent-dark text-white"
             : "border border-accent/30 bg-accent/10 text-accent-dark"
@@ -455,8 +563,11 @@ function PersonBadge({ name, primary }: { name: string; primary?: boolean }) {
       >
         {initials(name)}
       </span>
-      <span className="line-clamp-2 text-center text-xs font-medium leading-tight text-ink">
+      <span className="line-clamp-2 h-8 text-center text-xs font-medium leading-tight text-ink">
         {name}
+      </span>
+      <span className="h-3.5 text-[10px] leading-none text-ink-faint">
+        {years}
       </span>
     </span>
   );
@@ -464,28 +575,42 @@ function PersonBadge({ name, primary }: { name: string; primary?: boolean }) {
 
 function PersonForm({
   title,
-  initialName = "",
-  initialSpouse = "",
+  initial,
   onSave,
   onCancel,
 }: {
   title: string;
-  initialName?: string;
-  initialSpouse?: string;
-  onSave: (name: string, spouse: string) => Promise<void>;
+  initial?: {
+    name: string;
+    spouse_name: string | null;
+    born_year: number | null;
+    died_year: number | null;
+    spouse_born_year: number | null;
+    spouse_died_year: number | null;
+  };
+  onSave: (details: PersonDetails) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState(initialName);
-  const [spouse, setSpouse] = useState(initialSpouse);
+  const [details, setDetails] = useState<PersonDetails>({
+    name: initial?.name ?? "",
+    spouse: initial?.spouse_name ?? "",
+    born: initial?.born_year?.toString() ?? "",
+    died: initial?.died_year?.toString() ?? "",
+    spouseBorn: initial?.spouse_born_year?.toString() ?? "",
+    spouseDied: initial?.spouse_died_year?.toString() ?? "",
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const set = (key: keyof PersonDetails) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setDetails((d) => ({ ...d, [key]: e.target.value }));
+
   const submit = async () => {
-    if (!name.trim() || saving) return;
+    if (!details.name.trim() || saving) return;
     setSaving(true);
     setError(null);
     try {
-      await onSave(name, spouse);
+      await onSave(details);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -499,21 +624,58 @@ function PersonForm({
         {title}
       </p>
       <div className="space-y-2">
-        <Input
-          autoFocus
-          placeholder="Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-        />
-        <Input
-          placeholder="Spouse or partner (optional)"
-          value={spouse}
-          onChange={(e) => setSpouse(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-        />
         <div className="flex gap-2">
-          <Button size="sm" onClick={submit} disabled={!name.trim() || saving}>
+          <Input
+            autoFocus
+            placeholder="Name"
+            value={details.name}
+            onChange={set("name")}
+          />
+          <Input
+            className="w-24 shrink-0"
+            placeholder="Born"
+            inputMode="numeric"
+            value={details.born}
+            onChange={set("born")}
+          />
+          <Input
+            className="w-24 shrink-0"
+            placeholder="Died"
+            inputMode="numeric"
+            value={details.died}
+            onChange={set("died")}
+          />
+        </div>
+        <div className="flex gap-2">
+          <Input
+            placeholder="Spouse or partner (optional)"
+            value={details.spouse}
+            onChange={set("spouse")}
+          />
+          <Input
+            className="w-24 shrink-0"
+            placeholder="Born"
+            inputMode="numeric"
+            value={details.spouseBorn}
+            onChange={set("spouseBorn")}
+          />
+          <Input
+            className="w-24 shrink-0"
+            placeholder="Died"
+            inputMode="numeric"
+            value={details.spouseDied}
+            onChange={set("spouseDied")}
+          />
+        </div>
+        <p className="text-xs text-ink-faint">
+          Years are optional — leave "Died" blank for anyone living.
+        </p>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={submit}
+            disabled={!details.name.trim() || saving}
+          >
             {saving ? "Saving…" : "Save"}
           </Button>
           <Button size="sm" variant="ghost" onClick={onCancel}>
