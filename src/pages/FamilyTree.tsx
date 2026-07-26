@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  TreeDeciduous,
-  Heart,
-  HeartOff,
-  Plus,
-  Pencil,
-  Trash2,
-  X,
-} from "lucide-react";
+import { TreeDeciduous, Heart, Plus, Pencil, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -612,10 +604,12 @@ function ChartCard({
         {node.spouse_name && (
           <>
             {node.divorced ? (
-              <HeartOff
+              <span
                 aria-label="Divorced"
-                className="mt-4 h-3.5 w-3.5 shrink-0 text-ink-faint"
-              />
+                className="mt-4 shrink-0 rounded-full border border-paper-deep bg-paper-warm px-1.5 py-px text-[9px] font-medium lowercase leading-tight text-ink-faint"
+              >
+                div.
+              </span>
             ) : (
               <Heart className="mt-4 h-3.5 w-3.5 shrink-0 fill-accent text-accent" />
             )}
@@ -770,7 +764,7 @@ function PersonForm({
               }
               className="h-4 w-4 accent-accent"
             />
-            Divorced or separated (shown with a muted, slashed heart)
+            Divorced or separated (shown with a small "div." note)
           </label>
         )}
         <div className="flex gap-2">
