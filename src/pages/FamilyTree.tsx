@@ -165,12 +165,15 @@ function layoutBranch(n: TreeNode): BranchLayout {
     mergeShape(packed, k.shape, dx, 0);
   });
 
-  // Center the card over its children, unless a grandchild's in-law card
-  // occupies this row — then slide left of it.
+  // Center the card over its children, unless a child's in-law card
+  // occupies this row — then slide just far enough to whichever side is
+  // closer.
   let cx = kids.length ? (offsets[0] + offsets[offsets.length - 1]) / 2 : 0;
   const claimed = packed.get(-1);
-  if (claimed && cx + CARD_W / 2 + HGAP > claimed.l && cx - CARD_W / 2 < claimed.r) {
-    cx = claimed.l - HGAP - CARD_W / 2;
+  if (claimed && cx + CARD_W / 2 + HGAP > claimed.l && cx - CARD_W / 2 - HGAP < claimed.r) {
+    const leftCx = claimed.l - HGAP - CARD_W / 2;
+    const rightCx = claimed.r + HGAP + CARD_W / 2;
+    cx = cx - leftCx <= rightCx - cx ? leftCx : rightCx;
   }
 
   const shape: Shape = new Map([[0, { l: -CARD_W / 2, r: CARD_W / 2 }]]);
@@ -187,10 +190,11 @@ function layoutBranch(n: TreeNode): BranchLayout {
   });
 
   // The spouse's parents (and any branch hanging off them, e.g. the
-  // spouse's siblings) sit above-right of this card.
+  // spouse's siblings) sit directly above the spouse's half of this card,
+  // so the short dashed drop into their child can't be misread.
   if (n.parentsSpouse && n.spouse_name) {
     const inLaws = layoutBranch(n.parentsSpouse);
-    let dxSp = CARD_W + HGAP;
+    let dxSp = CARD_W / 2 + HGAP;
     for (const [row, ext] of inLaws.shape) {
       const m = shape.get(row - 1);
       if (m) dxSp = Math.max(dxSp, m.r + HGAP - ext.l);
@@ -248,24 +252,29 @@ function layoutChart(roots: TreeNode[]) {
   const chartH =
     Math.max(...cards.map((c) => c.y ?? 0)) + CARD_H + PAD;
 
-  // Turn edges into SVG elbow paths from the final positions.
+  // Turn edges into SVG elbow paths from the final positions. In-law
+  // connections are dashed and bend closer to the card than the shared
+  // children bus, so the two kinds of line never blend together.
   const byId = new Map(cards.map((c) => [c.node.id, c]));
-  const paths: string[] = [];
+  const paths: Array<{ d: string; dashed: boolean }> = [];
   for (const e of edges) {
     const from = byId.get(e.fromId);
     const to = byId.get(e.toId);
     if (!from || !to) continue;
-    const fx = from.x + CARD_W / 2;
-    const fy = (from.y ?? 0) + CARD_H;
     const ty = to.y ?? 0;
-    const midY = ty - VGAP / 2;
+    const dashed = e.kind === "spouseParents";
+    // Dashed in-law lines leave the card slightly off-center and bend
+    // closer to the card, so they never share a track with the solid
+    // children lines.
+    const fx = from.x + CARD_W / 2 - (dashed ? 24 : 0);
+    const fy = (from.y ?? 0) + CARD_H;
+    const midY = dashed ? ty - VGAP / 4 : ty - VGAP / 2;
     // A couple card with the spouse's parents above splits its incoming
     // lines: blood side enters left of center, in-law side right of center.
-    const tx =
-      e.kind === "spouseParents"
-        ? to.x + (CARD_W * 3) / 4
-        : to.x + CARD_W / 2 - (to.node.parentsSpouse ? CARD_W / 4 : 0);
-    paths.push(`M ${fx} ${fy} V ${midY} H ${tx} V ${ty}`);
+    const tx = dashed
+      ? to.x + (CARD_W * 3) / 4
+      : to.x + CARD_W / 2 - (to.node.parentsSpouse ? CARD_W / 4 : 0);
+    paths.push({ d: `M ${fx} ${fy} V ${midY} H ${tx} V ${ty}`, dashed });
   }
 
   return { cards, paths, chartW, chartH };
@@ -376,13 +385,15 @@ export default function FamilyTree() {
                 height={chart.chartH}
                 aria-hidden
               >
-                {chart.paths.map((d, i) => (
+                {chart.paths.map((p, i) => (
                   <path
                     key={i}
-                    d={d}
+                    d={p.d}
                     fill="none"
-                    stroke="#d8c5a5"
+                    stroke={p.dashed ? "#bf5700" : "#d8c5a5"}
+                    strokeOpacity={p.dashed ? 0.45 : 1}
                     strokeWidth="1.5"
+                    strokeDasharray={p.dashed ? "5 4" : undefined}
                   />
                 ))}
               </svg>
