@@ -36,7 +36,9 @@ export interface PersonDetails {
 
 function yearOrNull(raw: string): number | null {
   const n = parseInt(raw.trim(), 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  // Real four-digit years only, so a typo like 19555 can't stick to a card.
+  const max = new Date().getFullYear() + 1;
+  return Number.isFinite(n) && n >= 1000 && n <= max ? n : null;
 }
 
 function detailColumns(d: PersonDetails) {

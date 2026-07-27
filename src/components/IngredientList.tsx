@@ -2,6 +2,35 @@ import { scaleIngredient } from "@/lib/scaling";
 import { formatMetric, isConvertibleUnit, type UnitSystem } from "@/lib/units";
 import type { Ingredient } from "@/lib/types";
 
+// Match a spelled-out unit's number: "2 cups" halved shows "1 cup", "1 cup"
+// doubled shows "2 cups". Abbreviations (tbsp, oz) never inflect.
+const UNIT_PLURALS: Record<string, string> = {
+  cup: "cups",
+  tablespoon: "tablespoons",
+  teaspoon: "teaspoons",
+  quart: "quarts",
+  pint: "pints",
+  gallon: "gallons",
+  pound: "pounds",
+  ounce: "ounces",
+  stick: "sticks",
+  clove: "cloves",
+  slice: "slices",
+  can: "cans",
+  package: "packages",
+  bunch: "bunches",
+};
+const UNIT_SINGULARS = Object.fromEntries(
+  Object.entries(UNIT_PLURALS).map(([s, p]) => [p, s])
+);
+
+function inflectUnit(unit: string, amount: number): string {
+  const key = unit.toLowerCase();
+  const singular = UNIT_PLURALS[key] ? key : UNIT_SINGULARS[key];
+  if (!singular) return unit;
+  return amount > 1 ? UNIT_PLURALS[singular] : singular;
+}
+
 interface Props {
   ingredients: Ingredient[];
   factor: number;
@@ -41,7 +70,11 @@ export function IngredientLine({
   }
 
   // Metric display: convert the scaled amount when the unit is convertible.
-  let amountText = `${line.quantityText}${ingredient.unit ? ` ${ingredient.unit}` : ""}`;
+  const scaledAmount = line.scaledHigh ?? line.scaledLow ?? 0;
+  const unitText = ingredient.unit
+    ? ` ${inflectUnit(ingredient.unit, scaledAmount)}`
+    : "";
+  let amountText = `${line.quantityText}${unitText}`;
   if (
     units === "metric" &&
     ingredient.unit &&

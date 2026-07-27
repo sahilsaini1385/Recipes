@@ -6,6 +6,8 @@ export interface Country {
 /** Turn a 2-letter country code into its flag emoji (regional indicators). */
 export function flagEmoji(code: string): string {
   if (!/^[A-Za-z]{2}$/.test(code)) return "🏳️";
+  // Kosovo has no emoji flag; regional indicators would render as raw "XK".
+  if (code.toUpperCase() === "XK") return "🏳️";
   return code
     .toUpperCase()
     .replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));

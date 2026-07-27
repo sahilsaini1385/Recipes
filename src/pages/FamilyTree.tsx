@@ -11,7 +11,13 @@ import {
 } from "@/hooks/useFamilyTree";
 import { cn } from "@/lib/utils";
 
-const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+const firstName = (name: string) => {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.replace(/^["'“”‘’()]+|["'“”‘’()]+$/g, ""));
+  return words.find(Boolean) ?? name.trim();
+};
 
 // Suffixes that shouldn't count as a surname for monogram purposes.
 const NAME_SUFFIXES = new Set(["sr", "jr", "ii", "iii", "iv", "v"]);
@@ -733,7 +739,10 @@ function ChartCard({
         style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
       >
         {label && (
-          <span className="absolute inset-x-2 top-1.5 truncate text-center text-[9px] font-medium uppercase tracking-wide text-ink-faint">
+          <span
+            title={label}
+            className="absolute inset-x-2 top-1.5 truncate text-center text-[9px] font-medium uppercase tracking-wide text-ink-faint"
+          >
             {label}
           </span>
         )}
@@ -776,7 +785,10 @@ function PersonBadge({
       >
         {initials(name)}
       </span>
-      <span className="line-clamp-2 h-8 text-center text-xs font-medium leading-tight text-ink">
+      <span
+        title={name}
+        className="line-clamp-2 h-8 text-center text-xs font-medium leading-tight text-ink"
+      >
         {name}
       </span>
       <span className="h-3.5 text-[10px] leading-none text-ink-faint">

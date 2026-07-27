@@ -93,7 +93,7 @@ export default function Passport() {
         </div>
         <p className="mt-1 text-white/90">
           Together the Jungmans have been to <strong>{familyTotal}</strong> of{" "}
-          {target} {isCountry ? "countries" : "US states"}.
+          {Math.max(target, familyTotal)} {isCountry ? "countries" : "US states"}.
         </p>
         <ProgressTrack count={familyTotal} target={target} tone="light" />
         <div className="mt-4 inline-flex rounded-lg bg-white/15 p-0.5">
@@ -291,7 +291,7 @@ function MemberCard({
         </h2>
         <p className="text-sm text-ink-soft">
           <strong className="text-base text-ink">{codes.size}</strong> of{" "}
-          {target}
+          {Math.max(target, codes.size)}
         </p>
       </div>
 

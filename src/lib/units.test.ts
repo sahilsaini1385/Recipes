@@ -46,6 +46,10 @@ describe("formatMetric with scaled amounts", () => {
       formatMetric(line.scaledLow!, line.scaledHigh, ing.unit!)
     ).toBe("450–910 g");
   });
+  it("keeps both ends when a range crosses into liters or kilos", () => {
+    expect(formatMetric(2, 5, "cups")).toBe("0.5–1.2 l");
+    expect(formatMetric(1, 3, "pounds")).toBe("0.5–1.4 kg");
+  });
 });
 
 describe("convertTemperatures", () => {
@@ -60,6 +64,12 @@ describe("convertTemperatures", () => {
   it("converts bare oven temperatures in plausible range", () => {
     expect(convertTemperatures("Bake at 350 degrees until golden")).toBe(
       "Bake at 175°C until golden"
+    );
+  });
+  it("converts both ends of Fahrenheit ranges", () => {
+    expect(convertTemperatures("Bake at 350–375°F")).toBe("Bake at 175–190°C");
+    expect(convertTemperatures("roast at 350 to 375 degrees F")).toBe(
+      "roast at 175–190°C"
     );
   });
   it("leaves non-oven numbers alone", () => {

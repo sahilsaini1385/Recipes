@@ -95,6 +95,14 @@ export function formatMetric(
     if (highM && highM.unit === lowM.unit) {
       return `${lowM.value}–${highM.value} ${lowM.unit}`;
     }
+    // Range straddles the 1000 boundary ("2–5 cups" → 0.5–1.2 l): express
+    // both ends in the larger unit rather than dropping the top of the range.
+    if (highM && highM.unit === "l" && lowM.unit === "ml") {
+      return `${Math.round((lowM.value / 1000) * 10) / 10}–${highM.value} l`;
+    }
+    if (highM && highM.unit === "kg" && lowM.unit === "g") {
+      return `${Math.round((lowM.value / 1000) * 10) / 10}–${highM.value} kg`;
+    }
   }
   return `${lowM.value} ${lowM.unit}`;
 }
@@ -109,7 +117,12 @@ function fToC(f: number): number {
  * plausible oven range, to avoid mangling other numbers).
  */
 export function convertTemperatures(text: string): string {
+  // Ranges first ("350–375°F"), so the low end isn't left in Fahrenheit.
   let out = text.replace(
+    /(\d{2,3})\s*(?:°\s*F?\s*)?(?:[-–—]|to)\s*(\d{2,3})\s*(?:°\s*F\b|degrees?\s+F(?:ahrenheit)?\b)/gi,
+    (_, a, b) => `${fToC(Number(a))}–${fToC(Number(b))}°C`
+  );
+  out = out.replace(
     /(\d{2,3})\s*(?:°\s*F\b|degrees?\s+F(?:ahrenheit)?\b|F\b(?=\s*(?:oven|for|and|\.|,|\)|$)))/gi,
     (_, num) => `${fToC(Number(num))}°C`
   );

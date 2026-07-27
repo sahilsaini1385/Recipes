@@ -51,7 +51,9 @@ export function CookMode({
           <h1 className="font-serif text-xl font-semibold leading-tight">
             {recipe.title}
           </h1>
-          <p className="text-sm text-ink-soft">{servings} servings</p>
+          <p className="text-sm text-ink-soft">
+            {servings} {servings === 1 ? "serving" : "servings"}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <UnitToggle value={units} onChange={onChangeUnits} />
