@@ -28,6 +28,8 @@ import {
 import { US_STATES, stateName, US_STATE_TARGET } from "@/lib/usStates";
 import { cn } from "@/lib/utils";
 
+const firstMemberName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+
 export default function Passport() {
   const { isFamily } = useAuth();
   const {
@@ -43,6 +45,7 @@ export default function Passport() {
   const [kind, setKind] = useState<PlaceKind>("country");
   const [newName, setNewName] = useState("");
   const [addingMember, setAddingMember] = useState(false);
+  const [showAllMembers, setShowAllMembers] = useState(false);
 
   // Dataset + labels for the active mode.
   const isCountry = kind === "country";
@@ -77,6 +80,17 @@ export default function Passport() {
     );
   }, [data, isCountry]);
 
+  // Members with nothing logged for the active mode collapse into one
+  // summary line so eight empty "0 of 50" cards don't drown the page.
+  const zeroMembers = rankedMembers.filter((m) => visitsFor(m.id).size === 0);
+  const collapseZero =
+    !showAllMembers &&
+    zeroMembers.length >= 2 &&
+    zeroMembers.length < rankedMembers.length;
+  const visibleMembers = collapseZero
+    ? rankedMembers.filter((m) => visitsFor(m.id).size > 0)
+    : rankedMembers;
+
   const submitMember = async () => {
     if (!newName.trim()) return;
     await addMember(newName);
@@ -107,7 +121,7 @@ export default function Passport() {
               key={k}
               onClick={() => setKind(k)}
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                "rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 kind === k ? "bg-white text-accent-dark" : "text-white/90"
               )}
             >
@@ -117,7 +131,7 @@ export default function Passport() {
         </div>
       </div>
 
-      <div className="mb-4 flex items-center justify-between px-1 text-xs text-ink-faint">
+      <div className="mb-4 flex items-center justify-between px-1 text-xs text-ink-soft">
         <span>
           {syncing
             ? "Updating from the family Google Sheet…"
@@ -147,7 +161,7 @@ export default function Passport() {
             </p>
           )}
 
-          {rankedMembers.map((member) => (
+          {visibleMembers.map((member) => (
             <MemberCard
               key={member.id}
               member={member}
@@ -165,6 +179,26 @@ export default function Passport() {
               onDelete={() => removeMember(member.id)}
             />
           ))}
+
+          {collapseZero && (
+            <button
+              onClick={() => setShowAllMembers(true)}
+              className="w-full rounded-2xl border border-dashed border-paper-deep px-4 py-3 text-sm text-ink-soft hover:bg-paper-warm"
+            >
+              {zeroMembers.map((m) => firstMemberName(m.name)).join(", ")}{" "}
+              {zeroMembers.length === 1 ? "hasn't" : "haven't"} logged any{" "}
+              {isCountry ? "countries" : "states"} yet — show{" "}
+              {zeroMembers.length === 1 ? "them" : "all"}
+            </button>
+          )}
+          {showAllMembers && zeroMembers.length >= 2 && (
+            <button
+              onClick={() => setShowAllMembers(false)}
+              className="w-full py-1 text-center text-xs text-ink-faint"
+            >
+              Hide empty passports
+            </button>
+          )}
 
           {isFamily &&
             (addingMember ? (
@@ -297,23 +331,27 @@ function MemberCard({
 
       <ProgressTrack count={codes.size} target={target} tone="dark" />
 
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-accent-dark"
-      >
-        {expanded ? (
-          <>
-            <ChevronUp className="h-4 w-4" /> Hide list
-          </>
-        ) : (
-          <>
-            <ChevronDown className="h-4 w-4" />
-            {codes.size > 0
-              ? `Show all ${codes.size} ${codes.size === 1 ? unit : unitPlural}`
-              : `No ${unitPlural} yet`}
-          </>
-        )}
-      </button>
+      {codes.size === 0 && !canEdit ? (
+        <p className="mt-1 py-1.5 text-sm text-ink-faint">No {unitPlural} yet</p>
+      ) : (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="-mb-1.5 mt-1 inline-flex items-center gap-1 py-1.5 text-sm font-medium text-accent-dark"
+        >
+          {expanded ? (
+            <>
+              <ChevronUp className="h-4 w-4" /> Hide list
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-4 w-4" />
+              {codes.size > 0
+                ? `Show all ${codes.size} ${codes.size === 1 ? unit : unitPlural}`
+                : `Add ${unitPlural}`}
+            </>
+          )}
+        </button>
+      )}
 
       {expanded && (
         <>

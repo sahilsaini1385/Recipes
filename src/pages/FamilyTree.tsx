@@ -176,17 +176,35 @@ function packOffset(
   return dx;
 }
 
+/** "Nancy & Linda's parents" from a list of first names. */
+function parentsLabel(names: string[]): string {
+  const joined =
+    names.length > 1
+      ? `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`
+      : names[0];
+  return `${joined}'s parents`;
+}
+
+/** A display-only field hoisting attaches so promoted cards keep a caption. */
+type DisplayNode = TreeNode & { hoistLabel?: string };
+
 /**
  * "X's parents" cards on the blood side become real top-level parents (so
  * siblings like Robert can hang off them); the spouse's parents stay
- * attached and render above the spouse's half of the couple card.
+ * attached and render above the spouse's half of the couple card. Promoted
+ * cards carry a caption naming whose parents they are.
  */
-function hoist(n: TreeNode): TreeNode {
-  let cur: TreeNode = { ...n, children: n.children.map(hoist) };
+function hoist(n: TreeNode): DisplayNode {
+  let cur: DisplayNode = { ...n, children: n.children.map(hoist) };
   while (cur.parentsSelf) {
     const p = cur.parentsSelf;
+    const label = parentsLabel([
+      firstName(cur.name),
+      ...p.children.map((c) => firstName(c.name)),
+    ]);
     cur = {
       ...p,
+      hoistLabel: label,
       children: [
         ...p.children.map(hoist),
         { ...cur, parentsSelf: undefined },
@@ -246,7 +264,12 @@ function layoutBranch(n: TreeNode): BranchLayout {
   const shape: Shape = new Map([[0, [{ l: -CARD_W / 2, r: CARD_W / 2 }]]]);
   mergeShape(shape, packed, -cx, 1);
 
-  const self: RelPlace = { node: n, dx: 0, drow: 0 };
+  const self: RelPlace = {
+    node: n,
+    dx: 0,
+    drow: 0,
+    label: (n as DisplayNode).hoistLabel,
+  };
   const places: RelPlace[] = [self];
   const edges: PendingEdge[] = [];
   kids.forEach((k, i) => {
@@ -294,12 +317,10 @@ function layoutBranch(n: TreeNode): BranchLayout {
     const flip = dxSp + anchor.dx < 0;
     self.flip = flip;
 
-    const others = n.parentsSpouse.children.map((c) => firstName(c.name));
-    const names = [firstName(n.spouse_name), ...others];
-    const label =
-      (names.length > 1
-        ? `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`
-        : names[0]) + "'s parents";
+    const label = parentsLabel([
+      firstName(n.spouse_name),
+      ...n.parentsSpouse.children.map((c) => firstName(c.name)),
+    ]);
 
     mergeShape(shape, inLaws.shape, dxSp, drow);
     for (const p of inLaws.places) {
@@ -454,7 +475,6 @@ export default function FamilyTree() {
   const selected = roots && selectedId ? findNode(roots, selectedId) : null;
 
   const select = (id: string) => {
-    if (!isFamily) return;
     setPanel({ view: "actions" });
     setSelectedId((cur) => (cur === id ? null : id));
   };
@@ -562,7 +582,7 @@ export default function FamilyTree() {
         </Card>
       )}
 
-      {selected && isFamily && (
+      {selected && (
         <div className="fixed inset-x-0 bottom-16 z-20 px-3 pb-2 sm:bottom-0 sm:pb-4">
           <Card className="mx-auto max-w-xl border-paper-deep p-4 shadow-card-hover">
             <div className="mb-3 flex items-start justify-between gap-2">
@@ -584,7 +604,14 @@ export default function FamilyTree() {
               </button>
             </div>
 
-            {panel.view === "actions" && (
+            {panel.view === "actions" && !isFamily && (
+              <p className="text-sm text-ink-soft">
+                {yearLine(selected.born_year, selected.died_year) ||
+                  "No dates recorded."}{" "}
+                Sign in as family to make changes.
+              </p>
+            )}
+            {panel.view === "actions" && isFamily && (
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" onClick={() => setPanel({ view: "addChild" })}>
                   <Plus className="h-4 w-4" /> Add child
@@ -785,11 +812,18 @@ function PersonBadge({
       >
         {initials(name)}
       </span>
-      <span
-        title={name}
-        className="line-clamp-2 h-8 text-center text-xs font-medium leading-tight text-ink"
-      >
-        {name}
+      <span className="flex h-8 items-start justify-center overflow-hidden">
+        <span
+          title={name}
+          className={cn(
+            "text-center font-medium text-ink",
+            name.length > 20
+              ? "line-clamp-3 text-[10px] leading-[11px]"
+              : "line-clamp-2 text-xs leading-tight"
+          )}
+        >
+          {name}
+        </span>
       </span>
       <span className="h-3.5 text-[10px] leading-none text-ink-faint">
         {years}

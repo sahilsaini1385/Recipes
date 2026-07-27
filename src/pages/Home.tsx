@@ -62,7 +62,7 @@ export default function Home() {
       </div>
 
       {/* One row: Favorites toggle + category chips with counts */}
-      <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         <button
           onClick={() => setFavoritesOnly(!favoritesOnly)}
           className={cn(
