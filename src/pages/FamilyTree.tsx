@@ -305,14 +305,27 @@ function layoutChart(roots: TreeNode[]) {
 
   // Pack the root branches against each other by their actual outlines —
   // exactly like siblings — so separate families interleave into each
-  // other's free space instead of being stacked as rectangles.
+  // other's free space instead of being stacked as rectangles. Outlines
+  // are inflated by half a gap per side so unrelated families keep double
+  // the sibling clearance and their connector runs stay visually apart.
+  const inflate = (s: Shape): Shape => {
+    const out: Shape = new Map();
+    for (const [row, ivs] of s) {
+      out.set(
+        row,
+        ivs.map((iv) => ({ l: iv.l - HGAP / 2, r: iv.r + HGAP / 2 }))
+      );
+    }
+    return out;
+  };
   const forest: Shape = new Map();
   let prevDx = 0;
   displayRoots.forEach((r, i) => {
     const branch = layoutBranch(r);
-    const dx = i === 0 ? 0 : packOffset(forest, branch.shape, 0, prevDx + 1, 1);
+    const padded = inflate(branch.shape);
+    const dx = i === 0 ? 0 : packOffset(forest, padded, 0, prevDx + 1, 1);
     prevDx = dx;
-    mergeShape(forest, branch.shape, dx, 0);
+    mergeShape(forest, padded, dx, 0);
     for (const p of branch.places) {
       cards.push({
         node: p.node,
