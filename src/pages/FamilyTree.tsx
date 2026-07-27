@@ -241,24 +241,13 @@ function layoutBranch(n: TreeNode): BranchLayout {
   const cardShape: Shape = new Map([[0, [{ l: -CARD_W / 2, r: CARD_W / 2 }]]]);
   const rowAbove = packed.get(-1);
   if (rowAbove) {
-    const flat = [...packed.values()].flat();
-    const packedL = Math.min(...flat.map((e) => e.l));
-    const packedR = Math.max(...flat.map((e) => e.r));
-    const widthAt = (c: number) =>
-      Math.max(packedR, c + CARD_W / 2) - Math.min(packedL, c - CARD_W / 2);
+    // Settle into the nearest free slot: staying close to the natural
+    // center keeps the reading order sensible, which matters more than a
+    // slightly narrower chart.
     const base: Shape = new Map([[0, rowAbove]]);
     const rightCx = packOffset(base, cardShape, 0, cx, 1);
     const leftCx = packOffset(base, cardShape, 0, cx, -1);
-    const wL = widthAt(leftCx);
-    const wR = widthAt(rightCx);
-    cx =
-      wL !== wR
-        ? wL < wR
-          ? leftCx
-          : rightCx
-        : cx - leftCx <= rightCx - cx
-          ? leftCx
-          : rightCx;
+    cx = cx - leftCx <= rightCx - cx ? leftCx : rightCx;
   }
 
   const shape: Shape = new Map([[0, [{ l: -CARD_W / 2, r: CARD_W / 2 }]]]);
@@ -297,22 +286,10 @@ function layoutBranch(n: TreeNode): BranchLayout {
     const drow = -1 - anchor.drow;
     const right = packOffset(shape, inLaws.shape, drow, near - anchor.dx, 1);
     const left = packOffset(shape, inLaws.shape, drow, -near - anchor.dx, -1);
-    // Pick the side that keeps the combined branch narrowest; when both
-    // are equally wide, prefer the side closer to their child.
-    const shapeFlat = [...shape.values()].flat();
-    const shapeL = Math.min(...shapeFlat.map((e) => e.l));
-    const shapeR = Math.max(...shapeFlat.map((e) => e.r));
-    const inFlat = [...inLaws.shape.values()].flat();
-    const inL = Math.min(...inFlat.map((e) => e.l));
-    const inR = Math.max(...inFlat.map((e) => e.r));
-    const widthWith = (dx: number) =>
-      Math.max(shapeR, dx + inR) - Math.min(shapeL, dx + inL);
-    const wLeft = widthWith(left);
-    const wRight = widthWith(right);
+    // Whichever side keeps the in-law couple closest to their child wins —
+    // predictable adjacency reads better than a marginally narrower chart.
     const useLeft =
-      wLeft !== wRight
-        ? wLeft < wRight
-        : Math.abs(left + anchor.dx) < Math.abs(right + anchor.dx);
+      Math.abs(left + anchor.dx) < Math.abs(right + anchor.dx);
     const dxSp = useLeft ? left : right;
     const flip = dxSp + anchor.dx < 0;
     self.flip = flip;
@@ -392,22 +369,27 @@ function layoutChart(roots: TreeNode[]) {
 
   // Turn edges into SVG elbow paths from the final positions. All
   // parent-child lines look the same — a child is a child on both sides
-  // of the family — but lines coming from an in-law couple run on a
-  // slightly offset track so they never blend into the children bus.
+  // of the family. To keep two different parents' lines from merging into
+  // one ambiguous run, each parent's bundle gets its own track height in
+  // the gap between rows whenever their horizontal spans overlap.
   const byId = new Map(cards.map((c) => [c.node.id, c]));
-  const paths: Array<{ d: string }> = [];
+  interface RawEdge {
+    fx: number;
+    fy: number;
+    tx: number;
+    ty: number;
+    band: number; // target row: which inter-row gap the bend lives in
+    fromId: string;
+  }
+  const raw: RawEdge[] = [];
   for (const e of edges) {
     const from = byId.get(e.fromId);
     const to = byId.get(e.toId);
     if (!from || !to) continue;
     const ty = to.y ?? 0;
     const inLaw = e.kind === "spouseParents";
-    // In-law lines leave the card slightly off-center and run on a track
-    // 6px below the children bus (above the card labels), so crossing
-    // lines stay visually separate.
     const fx = from.x + CARD_W / 2 - (inLaw ? 24 : 0);
     const fy = (from.y ?? 0) + CARD_H;
-    const midY = inLaw ? ty - VGAP / 2 + 6 : ty - VGAP / 2;
     // A couple card with the spouse's parents above splits its incoming
     // lines: each line enters above the person it belongs to (the couple
     // flips when their in-laws sit on the left).
@@ -417,7 +399,48 @@ function layoutChart(roots: TreeNode[]) {
       : to.x +
         CARD_W / 2 -
         (to.node.parentsSpouse ? spouseSide * (CARD_W / 4) : 0);
-    paths.push({ d: `M ${fx} ${fy} V ${midY} H ${tx} V ${ty}` });
+    raw.push({ fx, fy, tx, ty, band: to.row, fromId: e.fromId });
+  }
+
+  // Track assignment per band: group segments by parent, then give
+  // x-overlapping groups different heights (center, then a bit lower,
+  // then a bit higher — all clear of card edges at VGAP=40).
+  const TRACK_OFFSETS = [0, 6, -6];
+  const bandGroups = new Map<number, Map<string, { min: number; max: number }>>();
+  for (const e of raw) {
+    const groups =
+      bandGroups.get(e.band) ?? bandGroups.set(e.band, new Map()).get(e.band)!;
+    const span = groups.get(e.fromId);
+    const lo = Math.min(e.fx, e.tx);
+    const hi = Math.max(e.fx, e.tx);
+    if (span) {
+      span.min = Math.min(span.min, lo);
+      span.max = Math.max(span.max, hi);
+    } else groups.set(e.fromId, { min: lo, max: hi });
+  }
+  const trackOf = new Map<string, number>(); // `${band}:${fromId}` -> offset
+  for (const [band, groups] of bandGroups) {
+    const ordered = [...groups.entries()].sort((a, b) => a[1].min - b[1].min);
+    const placed: Array<{ min: number; max: number; level: number }> = [];
+    for (const [fromId, span] of ordered) {
+      const taken = new Set(
+        placed
+          .filter((p) => span.min <= p.max && span.max >= p.min)
+          .map((p) => p.level)
+      );
+      let level = 0;
+      while (taken.has(level % TRACK_OFFSETS.length) && level < TRACK_OFFSETS.length) level++;
+      level = level % TRACK_OFFSETS.length;
+      placed.push({ ...span, level });
+      trackOf.set(`${band}:${fromId}`, TRACK_OFFSETS[level]);
+    }
+  }
+
+  const paths: Array<{ d: string }> = [];
+  for (const e of raw) {
+    const offset = trackOf.get(`${e.band}:${e.fromId}`) ?? 0;
+    const midY = e.ty - VGAP / 2 + offset;
+    paths.push({ d: `M ${e.fx} ${e.fy} V ${midY} H ${e.tx} V ${e.ty}` });
   }
 
   return { cards, paths, chartW, chartH };
