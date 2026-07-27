@@ -65,10 +65,12 @@ function ancestorDepth(nodes: TreeNode[]): number {
 
 const CARD_W = 200;
 const CARD_H = 118;
-const HGAP = 28;
-const VGAP = 56;
+// Gaps sized to the minimum the connector tracks need: the children bus
+// runs at VGAP/2 above a row, the in-law track 6px below it, and captions
+// live inside the cards — nothing else uses the space between cards.
+const HGAP = 20;
+const VGAP = 40;
 const PAD = 24;
-const LABEL_H = 18;
 
 interface PlacedCard {
   node: TreeNode;
@@ -195,15 +197,31 @@ function layoutBranch(n: TreeNode): BranchLayout {
   });
 
   // Center the card over its children, unless a child's in-law card
-  // occupies this row — then settle into the nearest free slot.
+  // occupies this row — then settle into the free slot that keeps the
+  // whole branch narrowest (nearness breaks ties), since any extra width
+  // here is paid again by every generation packed above.
   let cx = kids.length ? (offsets[0] + offsets[offsets.length - 1]) / 2 : 0;
   const cardShape: Shape = new Map([[0, [{ l: -CARD_W / 2, r: CARD_W / 2 }]]]);
   const rowAbove = packed.get(-1);
   if (rowAbove) {
+    const flat = [...packed.values()].flat();
+    const packedL = Math.min(...flat.map((e) => e.l));
+    const packedR = Math.max(...flat.map((e) => e.r));
+    const widthAt = (c: number) =>
+      Math.max(packedR, c + CARD_W / 2) - Math.min(packedL, c - CARD_W / 2);
     const base: Shape = new Map([[0, rowAbove]]);
     const rightCx = packOffset(base, cardShape, 0, cx, 1);
     const leftCx = packOffset(base, cardShape, 0, cx, -1);
-    cx = cx - leftCx <= rightCx - cx ? leftCx : rightCx;
+    const wL = widthAt(leftCx);
+    const wR = widthAt(rightCx);
+    cx =
+      wL !== wR
+        ? wL < wR
+          ? leftCx
+          : rightCx
+        : cx - leftCx <= rightCx - cx
+          ? leftCx
+          : rightCx;
   }
 
   const shape: Shape = new Map([[0, [{ l: -CARD_W / 2, r: CARD_W / 2 }]]]);
@@ -237,8 +255,24 @@ function layoutBranch(n: TreeNode): BranchLayout {
     const drow = -1 - anchor.drow;
     const right = packOffset(shape, inLaws.shape, drow, near - anchor.dx, 1);
     const left = packOffset(shape, inLaws.shape, drow, -near - anchor.dx, -1);
-    const flip = Math.abs(left + anchor.dx) < Math.abs(right + anchor.dx);
-    const dxSp = flip ? left : right;
+    // Pick the side that keeps the combined branch narrowest; when both
+    // are equally wide, prefer the side closer to their child.
+    const shapeFlat = [...shape.values()].flat();
+    const shapeL = Math.min(...shapeFlat.map((e) => e.l));
+    const shapeR = Math.max(...shapeFlat.map((e) => e.r));
+    const inFlat = [...inLaws.shape.values()].flat();
+    const inL = Math.min(...inFlat.map((e) => e.l));
+    const inR = Math.max(...inFlat.map((e) => e.r));
+    const widthWith = (dx: number) =>
+      Math.max(shapeR, dx + inR) - Math.min(shapeL, dx + inL);
+    const wLeft = widthWith(left);
+    const wRight = widthWith(right);
+    const useLeft =
+      wLeft !== wRight
+        ? wLeft < wRight
+        : Math.abs(left + anchor.dx) < Math.abs(right + anchor.dx);
+    const dxSp = useLeft ? left : right;
+    const flip = dxSp + anchor.dx < 0;
     self.flip = flip;
 
     const others = n.parentsSpouse.children.map((c) => firstName(c.name));
@@ -269,24 +303,27 @@ function layoutChart(roots: TreeNode[]) {
   const cards: PlacedCard[] = [];
   const edges: PendingEdge[] = [];
 
-  let cursor = 0;
-  for (const r of displayRoots) {
+  // Pack the root branches against each other by their actual outlines —
+  // exactly like siblings — so separate families interleave into each
+  // other's free space instead of being stacked as rectangles.
+  const forest: Shape = new Map();
+  let prevDx = 0;
+  displayRoots.forEach((r, i) => {
     const branch = layoutBranch(r);
-    const all = [...branch.shape.values()].flat();
-    const minL = Math.min(...all.map((e) => e.l));
-    const maxR = Math.max(...all.map((e) => e.r));
+    const dx = i === 0 ? 0 : packOffset(forest, branch.shape, 0, prevDx + 1, 1);
+    prevDx = dx;
+    mergeShape(forest, branch.shape, dx, 0);
     for (const p of branch.places) {
       cards.push({
         node: p.node,
-        x: cursor + (p.dx - minL) - CARD_W / 2,
+        x: dx + p.dx - CARD_W / 2,
         row: p.drow,
         label: p.label,
         flip: p.flip,
       });
     }
     edges.push(...branch.edges);
-    cursor += maxR - minL + HGAP * 2;
-  }
+  });
 
   // Normalize coordinates to start at the padding edge.
   const minRow = Math.min(...cards.map((c) => c.row));
@@ -294,7 +331,7 @@ function layoutChart(roots: TreeNode[]) {
   const rowHeight = CARD_H + VGAP;
   for (const c of cards) {
     c.x += PAD - minX;
-    c.y = PAD + LABEL_H + (c.row - minRow) * rowHeight;
+    c.y = PAD + (c.row - minRow) * rowHeight;
   }
   const chartW = Math.max(...cards.map((c) => c.x)) + CARD_W + PAD;
   const chartH =
