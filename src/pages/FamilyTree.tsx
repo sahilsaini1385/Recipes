@@ -225,11 +225,19 @@ function layoutBranch(n: TreeNode): BranchLayout {
   // closer. If they land on the left, the couple flips so the spouse's
   // half faces their parents.
   if (n.parentsSpouse && n.spouse_name) {
-    const inLaws = layoutBranch(n.parentsSpouse);
+    // Hoist so ancestors of the in-law couple themselves (e.g. Kathryn
+    // Reeves' parents) become real cards above them, then anchor the
+    // placement to the in-law couple's own card so THEY stay right next
+    // to their child regardless of how tall their branch is.
+    const inLaws = layoutBranch(hoist(n.parentsSpouse));
+    const anchor = inLaws.places.find(
+      (p) => p.node.id === n.parentsSpouse!.id
+    ) ?? { dx: 0, drow: 0 };
     const near = CARD_W / 2 + HGAP;
-    const right = packOffset(shape, inLaws.shape, -1, near, 1);
-    const left = packOffset(shape, inLaws.shape, -1, -near, -1);
-    const flip = Math.abs(left) < Math.abs(right);
+    const drow = -1 - anchor.drow;
+    const right = packOffset(shape, inLaws.shape, drow, near - anchor.dx, 1);
+    const left = packOffset(shape, inLaws.shape, drow, -near - anchor.dx, -1);
+    const flip = Math.abs(left + anchor.dx) < Math.abs(right + anchor.dx);
     const dxSp = flip ? left : right;
     self.flip = flip;
 
@@ -240,12 +248,12 @@ function layoutBranch(n: TreeNode): BranchLayout {
         ? `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`
         : names[0]) + "'s parents";
 
-    mergeShape(shape, inLaws.shape, dxSp, -1);
+    mergeShape(shape, inLaws.shape, dxSp, drow);
     for (const p of inLaws.places) {
       places.push({
         ...p,
         dx: p.dx + dxSp,
-        drow: p.drow - 1,
+        drow: p.drow + drow,
         label: p.node.id === n.parentsSpouse.id ? label : p.label,
       });
     }
