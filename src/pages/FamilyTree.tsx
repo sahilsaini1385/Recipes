@@ -658,22 +658,22 @@ function ChartCard({
   ) : null;
   return (
     <>
-      {label && (
-        <p
-          className="absolute text-center text-[10px] font-medium uppercase tracking-wide text-ink-faint"
-          style={{ left: x, top: (y ?? 0) - LABEL_H, width: CARD_W }}
-        >
-          {label}
-        </p>
-      )}
       <button
         onClick={() => onSelect(node.id)}
         className={cn(
-          "absolute flex items-start justify-center gap-1 rounded-2xl border bg-white px-2 pt-2.5 text-left shadow-card transition-shadow hover:shadow-card-hover",
+          "absolute flex items-start justify-center gap-1 rounded-2xl border bg-white px-2 text-left shadow-card transition-shadow hover:shadow-card-hover",
+          // Labeled cards reserve a strip at the top for the caption, so
+          // connector lines outside the card can never cut through it.
+          label ? "pt-[18px]" : "pt-2.5",
           selected ? "border-accent ring-2 ring-accent/40" : "border-paper-deep/60"
         )}
         style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
       >
+        {label && (
+          <span className="absolute inset-x-2 top-1.5 truncate text-center text-[9px] font-medium uppercase tracking-wide text-ink-faint">
+            {label}
+          </span>
+        )}
         {flip ? (
           <>
             {spouseBadge}
