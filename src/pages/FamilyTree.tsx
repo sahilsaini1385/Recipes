@@ -292,35 +292,34 @@ function layoutChart(roots: TreeNode[]) {
   const chartH =
     Math.max(...cards.map((c) => c.y ?? 0)) + CARD_H + PAD;
 
-  // Turn edges into SVG elbow paths from the final positions. In-law
-  // connections are dashed and bend closer to the card than the shared
-  // children bus, so the two kinds of line never blend together.
+  // Turn edges into SVG elbow paths from the final positions. All
+  // parent-child lines look the same — a child is a child on both sides
+  // of the family — but lines coming from an in-law couple run on a
+  // slightly offset track so they never blend into the children bus.
   const byId = new Map(cards.map((c) => [c.node.id, c]));
-  const paths: Array<{ d: string; dashed: boolean }> = [];
+  const paths: Array<{ d: string }> = [];
   for (const e of edges) {
     const from = byId.get(e.fromId);
     const to = byId.get(e.toId);
     if (!from || !to) continue;
     const ty = to.y ?? 0;
-    const dashed = e.kind === "spouseParents";
-    // Dashed in-law lines leave the card slightly off-center and bend
-    // closer to the card, so they never share a track with the solid
-    // children lines.
-    const fx = from.x + CARD_W / 2 - (dashed ? 24 : 0);
+    const inLaw = e.kind === "spouseParents";
+    // In-law lines leave the card slightly off-center and run on a track
+    // 6px below the children bus (above the card labels), so crossing
+    // lines stay visually separate.
+    const fx = from.x + CARD_W / 2 - (inLaw ? 24 : 0);
     const fy = (from.y ?? 0) + CARD_H;
-    // Dashed lines run 6px below the solid bus — above the card labels,
-    // never through them.
-    const midY = dashed ? ty - VGAP / 2 + 6 : ty - VGAP / 2;
+    const midY = inLaw ? ty - VGAP / 2 + 6 : ty - VGAP / 2;
     // A couple card with the spouse's parents above splits its incoming
     // lines: each line enters above the person it belongs to (the couple
     // flips when their in-laws sit on the left).
     const spouseSide = to.flip ? -1 : 1;
-    const tx = dashed
+    const tx = inLaw
       ? to.x + CARD_W / 2 + spouseSide * (CARD_W / 4)
       : to.x +
         CARD_W / 2 -
         (to.node.parentsSpouse ? spouseSide * (CARD_W / 4) : 0);
-    paths.push({ d: `M ${fx} ${fy} V ${midY} H ${tx} V ${ty}`, dashed });
+    paths.push({ d: `M ${fx} ${fy} V ${midY} H ${tx} V ${ty}` });
   }
 
   return { cards, paths, chartW, chartH };
@@ -436,10 +435,8 @@ export default function FamilyTree() {
                     key={i}
                     d={p.d}
                     fill="none"
-                    stroke={p.dashed ? "#bf5700" : "#d8c5a5"}
-                    strokeOpacity={p.dashed ? 0.45 : 1}
+                    stroke="#d8c5a5"
                     strokeWidth="1.5"
-                    strokeDasharray={p.dashed ? "5 4" : undefined}
                   />
                 ))}
               </svg>
