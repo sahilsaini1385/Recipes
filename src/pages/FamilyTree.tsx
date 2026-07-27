@@ -13,14 +13,27 @@ import { cn } from "@/lib/utils";
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
-const initials = (name: string) =>
-  name
+// Suffixes that shouldn't count as a surname for monogram purposes.
+const NAME_SUFFIXES = new Set(["sr", "jr", "ii", "iii", "iv", "v"]);
+
+/**
+ * First name + surname initials. Quoted nicknames ('Rajinder "Tony"
+ * Saini' → RS), parentheticals, and suffixes (Sr/Jr/III) are skipped, and
+ * middle names don't steal the second slot ('Jack Bahal Saini' → JS).
+ */
+const initials = (name: string) => {
+  const words = name
     .trim()
     .split(/\s+/)
+    .filter((w) => !/^["“”'‘’(]/.test(w))
     .filter((w) => /[\p{L}\p{N}]/u.test(w))
-    .slice(0, 2)
+    .filter((w) => !NAME_SUFFIXES.has(w.toLowerCase().replace(/\./g, "")));
+  const picked =
+    words.length > 1 ? [words[0], words[words.length - 1]] : words;
+  return picked
     .map((w) => (w.match(/[\p{L}\p{N}]/u) ?? [""])[0].toUpperCase())
     .join("");
+};
 
 function yearLine(born: number | null, died: number | null): string {
   if (born && died) return `${born}–${died}`;
