@@ -15,3 +15,35 @@
     @apply font-serif;
   }
 }
+
+/* Family tree chart: scrollbar, entrance, and connector fade-in. */
+.tree-scroller {
+  scrollbar-width: thin;
+  scrollbar-color: #d8c5a5 transparent;
+}
+.tree-scroller::-webkit-scrollbar {
+  height: 8px;
+}
+.tree-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tree-scroller::-webkit-scrollbar-thumb {
+  background: #d8c5a5;
+  border-radius: 9999px;
+  border: 2px solid #f7efdf;
+  background-clip: padding-box;
+}
+.tree-scroller::-webkit-scrollbar-thumb:hover {
+  background-color: #bf5700;
+}
+@keyframes tree-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes connectors-in {
+  from {
+    opacity: 0;
+  }
+}

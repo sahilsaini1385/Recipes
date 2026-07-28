@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { TreeDeciduous, Heart, Plus, Pencil, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -380,6 +380,7 @@ function layoutChart(roots: TreeNode[]) {
     ty: number;
     band: number; // target row: which inter-row gap the bend lives in
     fromId: string;
+    toId: string;
   }
   const raw: RawEdge[] = [];
   for (const e of edges) {
@@ -399,7 +400,7 @@ function layoutChart(roots: TreeNode[]) {
       : to.x +
         CARD_W / 2 -
         (to.node.parentsSpouse ? spouseSide * (CARD_W / 4) : 0);
-    raw.push({ fx, fy, tx, ty, band: to.row, fromId: e.fromId });
+    raw.push({ fx, fy, tx, ty, band: to.row, fromId: e.fromId, toId: e.toId });
   }
 
   // Track assignment per band: group segments by parent, then give
@@ -436,11 +437,20 @@ function layoutChart(roots: TreeNode[]) {
     }
   }
 
-  const paths: Array<{ d: string }> = [];
+  // Rounded elbows read as drawn rather than plotted. Radius never exceeds
+  // half the horizontal run, and the vertical stubs are always >= 14px.
+  const paths: Array<{ d: string; fromId: string; toId: string }> = [];
   for (const e of raw) {
     const offset = trackOf.get(`${e.band}:${e.fromId}`) ?? 0;
     const midY = e.ty - VGAP / 2 + offset;
-    paths.push({ d: `M ${e.fx} ${e.fy} V ${midY} H ${e.tx} V ${e.ty}` });
+    const s = Math.sign(e.tx - e.fx);
+    const r = Math.min(6, Math.abs(e.tx - e.fx) / 2);
+    const d =
+      s === 0 || r < 1
+        ? `M ${e.fx} ${e.fy} V ${e.ty}`
+        : `M ${e.fx} ${e.fy} V ${midY - r} Q ${e.fx} ${midY} ${e.fx + s * r} ${midY}` +
+          ` H ${e.tx - s * r} Q ${e.tx} ${midY} ${e.tx} ${midY + r} V ${e.ty}`;
+    paths.push({ d, fromId: e.fromId, toId: e.toId });
   }
 
   return { cards, paths, chartW, chartH };
@@ -475,11 +485,28 @@ export default function FamilyTree() {
     [roots]
   );
 
-  // Start the chart horizontally centered (it can be wider than a phone).
-  useEffect(() => {
+  // Start the chart horizontally centered (it can be wider than a phone) —
+  // but only once, so edits don't yank the user's scroll position around.
+  const centered = useRef(false);
+  useLayoutEffect(() => {
     const el = scrollerRef.current;
-    if (el && chart) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+    if (el && chart && !centered.current) {
+      el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+      centered.current = true;
+    }
+    updateFade();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chart]);
+
+  // Edge fades hint that more chart exists beyond the visible window.
+  const [fade, setFade] = useState({ l: false, r: false });
+  const updateFade = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const l = el.scrollLeft > 8;
+    const r = el.scrollLeft < el.scrollWidth - el.clientWidth - 8;
+    setFade((f) => (f.l === l && f.r === r ? f : { l, r }));
+  };
 
   // Find the selected node anywhere in the tree (children or ancestors).
   const findNode = (nodes: TreeNode[], id: string): TreeNode | null => {
@@ -500,6 +527,11 @@ export default function FamilyTree() {
   const select = (id: string) => {
     setPanel({ view: "actions" });
     setSelectedId((cur) => (cur === id ? null : id));
+    requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-person-id="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    });
   };
   const close = () => {
     setSelectedId(null);
@@ -507,6 +539,29 @@ export default function FamilyTree() {
   };
 
   const generations = roots ? maxDepth(roots) + ancestorDepth(roots) : 0;
+
+  // Margin labels naming each generation relative to the root couple.
+  const genLabels = useMemo(() => {
+    if (!chart || !roots || roots.length !== 1) return [];
+    const GEN_NAMES: Record<number, string> = {
+      [-4]: "Great-great-grandparents",
+      [-3]: "Great-grandparents",
+      [-2]: "Grandparents",
+      [-1]: "Parents",
+      [1]: "Children",
+      [2]: "Grandchildren",
+      [3]: "Great-grandchildren",
+    };
+    const rowHeight = CARD_H + VGAP;
+    const rootCard = chart.cards.find((c) => c.node.id === roots[0].id);
+    if (!rootCard) return [];
+    const rootIdx = Math.round(((rootCard.y ?? 0) - PAD) / rowHeight);
+    const rowCount = Math.round((chart.chartH - 2 * PAD + VGAP) / rowHeight);
+    return Array.from({ length: rowCount }, (_, idx) => ({
+      idx,
+      text: GEN_NAMES[idx - rootIdx] ?? "",
+    })).filter((g) => g.text);
+  }, [chart, roots]);
 
   return (
     <main
@@ -536,37 +591,119 @@ export default function FamilyTree() {
 
       {chart && (
         <>
-          <div
-            ref={scrollerRef}
-            className="overflow-x-auto rounded-2xl border border-paper-deep/70 bg-paper-warm/60 shadow-card"
-          >
+          <div className="relative">
             <div
-              className="relative"
-              style={{ width: chart.chartW, height: chart.chartH }}
+              ref={scrollerRef}
+              onScroll={updateFade}
+              className="tree-scroller overflow-x-auto overscroll-x-contain rounded-2xl border border-paper-deep/70 bg-[#f7efdf] shadow-card"
             >
-              <svg
-                className="absolute inset-0"
-                width={chart.chartW}
-                height={chart.chartH}
-                aria-hidden
+              <div
+                className="relative min-w-full [animation:tree-rise_450ms_cubic-bezier(0.22,1,0.36,1)_both] motion-reduce:animate-none"
+                style={{
+                  width: chart.chartW,
+                  height: chart.chartH,
+                  backgroundColor: "#f7efdf",
+                  backgroundImage: [
+                    "radial-gradient(120% 85% at 50% 0%, rgba(255,253,248,0.70) 0%, rgba(255,253,248,0) 55%)",
+                    "radial-gradient(circle, rgba(122,90,50,0.10) 1px, transparent 1.6px)",
+                  ].join(", "),
+                  backgroundSize: "auto, 22px 22px",
+                  backgroundPosition: "0 0, 11px 11px",
+                }}
               >
-                {chart.paths.map((p, i) => (
-                  <path
-                    key={i}
-                    d={p.d}
-                    fill="none"
-                    stroke="#d8c5a5"
-                    strokeWidth="1.5"
+                {/* Printed-plate double rule, living in the padding band. */}
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-2 rounded-[10px] border border-[#d8c5a5]/70"
+                />
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-[11px] rounded-lg border border-[#d8c5a5]/35"
+                />
+                <svg
+                  className="absolute inset-0 [animation:connectors-in_240ms_ease-out_240ms_both] motion-reduce:animate-none"
+                  width={chart.chartW}
+                  height={chart.chartH}
+                  aria-hidden
+                >
+                  {/* Everyone else's lines dim gently while a card is selected;
+                      the selected card's own lines paint on top in accent. */}
+                  <g
+                    className="transition-opacity duration-200"
+                    opacity={selectedId ? 0.45 : 1}
+                  >
+                    {chart.paths
+                      .filter(
+                        (p) =>
+                          !(
+                            selectedId &&
+                            (p.fromId === selectedId || p.toId === selectedId)
+                          )
+                      )
+                      .map((p) => (
+                        <path
+                          key={`${p.fromId}>${p.toId}`}
+                          d={p.d}
+                          fill="none"
+                          stroke="#c9b48d"
+                          strokeOpacity="0.9"
+                          strokeWidth="1.25"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      ))}
+                  </g>
+                  {selectedId &&
+                    chart.paths
+                      .filter(
+                        (p) => p.fromId === selectedId || p.toId === selectedId
+                      )
+                      .map((p) => (
+                        <path
+                          key={`${p.fromId}>${p.toId}`}
+                          d={p.d}
+                          fill="none"
+                          stroke="#bf5700"
+                          strokeOpacity="0.55"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      ))}
+                </svg>
+                {chart.cards.map((c) => (
+                  <ChartCard
+                    key={c.node.id}
+                    placed={c}
+                    selected={selectedId === c.node.id}
+                    onSelect={select}
                   />
                 ))}
-              </svg>
-              {chart.cards.map((c) => (
-                <ChartCard
-                  key={c.node.id}
-                  placed={c}
-                  selected={selectedId === c.node.id}
-                  onSelect={select}
-                />
+              </div>
+            </div>
+            {/* Edge fades: "there's more chart this way". */}
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-y-px left-px w-10 rounded-l-2xl bg-gradient-to-r from-[#f7efdf] to-transparent transition-opacity duration-300",
+                fade.l ? "opacity-100" : "opacity-0"
+              )}
+            />
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-y-px right-px w-10 rounded-r-2xl bg-gradient-to-l from-[#f7efdf] to-transparent transition-opacity duration-300",
+                fade.r ? "opacity-100" : "opacity-0"
+              )}
+            />
+            {/* Generation labels pinned to the left margin. */}
+            <div className="pointer-events-none absolute left-0 top-0">
+              {genLabels.map((g) => (
+                <span
+                  key={g.idx}
+                  className="absolute left-0 -translate-y-1/2 rounded-r-full bg-[#f7efdf]/90 py-1 pl-3 pr-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint"
+                  style={{ top: PAD + g.idx * (CARD_H + VGAP) + CARD_H / 2 + 1 }}
+                >
+                  {g.text}
+                </span>
               ))}
             </div>
           </div>
@@ -630,8 +767,8 @@ export default function FamilyTree() {
             {panel.view === "actions" && !isFamily && (
               <p className="text-sm text-ink-soft">
                 {yearLine(selected.born_year, selected.died_year) ||
-                  "No dates recorded."}{" "}
-                Sign in as family to make changes.
+                  "No dates recorded"}
+                {" · "}Sign in as family to make changes.
               </p>
             )}
             {panel.view === "actions" && isFamily && (
@@ -761,12 +898,12 @@ function ChartCard({
     node.divorced ? (
       <span
         aria-label="Divorced"
-        className="mt-4 shrink-0 rounded-full border border-paper-deep bg-paper-warm px-1.5 py-px text-[9px] font-medium lowercase leading-tight text-ink-faint"
+        className="mt-4 shrink-0 rounded-full border border-paper-deep bg-paper-warm px-1.5 py-px font-serif text-[9px] italic lowercase leading-tight text-ink-faint"
       >
         div.
       </span>
     ) : (
-      <Heart className="mt-4 h-3.5 w-3.5 shrink-0 fill-accent text-accent" />
+      <Heart className="mt-4 h-3 w-3 shrink-0 fill-accent/80 text-accent/80" />
     )
   ) : null;
   const spouseBadge = node.spouse_name ? (
@@ -777,21 +914,36 @@ function ChartCard({
   ) : null;
   return (
     <>
+      <div
+        data-person-id={node.id}
+        className="absolute left-0 top-0 transition-transform duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+        style={{
+          transform: `translate(${x}px, ${y ?? 0}px)`,
+          width: CARD_W,
+          height: CARD_H,
+        }}
+      >
       <button
         onClick={() => onSelect(node.id)}
         className={cn(
-          "absolute flex items-start justify-center gap-1 rounded-2xl border bg-white px-2 text-left shadow-card transition-shadow hover:shadow-card-hover",
+          "relative flex h-full w-full items-start justify-center gap-1 rounded-xl border bg-[#fffdf8] px-2 text-left",
+          "shadow-[0_1px_2px_rgba(78,59,33,0.06),0_6px_16px_-6px_rgba(78,59,33,0.14)]",
+          "transition-[transform,box-shadow,border-color] duration-200 ease-out",
+          "hover:-translate-y-px hover:shadow-[0_2px_4px_rgba(78,59,33,0.07),0_10px_24px_-6px_rgba(191,87,0,0.16)]",
+          "active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+          "motion-reduce:transition-none motion-reduce:hover:translate-y-0",
           // Labeled cards reserve a strip at the top for the caption, so
           // connector lines outside the card can never cut through it.
           label ? "pt-[18px]" : "pt-2.5",
-          selected ? "border-accent ring-2 ring-accent/40" : "border-paper-deep/60"
+          selected
+            ? "-translate-y-px border-accent shadow-[0_2px_4px_rgba(78,59,33,0.07),0_10px_24px_-6px_rgba(191,87,0,0.16)] ring-2 ring-accent/35"
+            : "border-[#dcc9a8]"
         )}
-        style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
       >
         {label && (
           <span
             title={label}
-            className="absolute inset-x-2 top-1.5 truncate text-center text-[9px] font-medium uppercase tracking-wide text-ink-faint"
+            className="absolute inset-x-2 top-1.5 truncate text-center text-[8px] font-semibold uppercase tracking-[0.18em] text-accent-dark/60"
           >
             {label}
           </span>
@@ -810,6 +962,7 @@ function ChartCard({
           </>
         )}
       </button>
+      </div>
     </>
   );
 }
@@ -823,14 +976,22 @@ function PersonBadge({
   years: string;
   primary?: boolean;
 }) {
+  // Elders read sepia, the living bloodline glows orange — generations
+  // register at a glance and the chart stops being a wall of orange dots.
+  const deceased = /–|d\./.test(years);
   return (
     <span className="flex w-[84px] flex-col items-center gap-1">
       <span
         className={cn(
-          "flex h-10 w-10 items-center justify-center rounded-full font-serif text-sm font-semibold shadow-sm",
-          primary
-            ? "bg-gradient-to-br from-accent to-accent-dark text-white"
-            : "border border-accent/30 bg-accent/10 text-accent-dark"
+          "flex h-10 w-10 items-center justify-center rounded-full font-serif text-[13px] font-semibold tracking-wide",
+          primary && !deceased &&
+            "bg-gradient-to-br from-accent to-accent-dark text-white ring-1 ring-accent-dark/25 ring-offset-2 ring-offset-[#fffdf8]",
+          primary && deceased &&
+            "bg-gradient-to-br from-[#a08a68] to-[#7d6a4e] text-[#f8f2e6] ring-1 ring-[#7d6a4e]/25 ring-offset-2 ring-offset-[#fffdf8]",
+          !primary && !deceased &&
+            "border border-accent/35 bg-[#fae7d4] text-accent-dark",
+          !primary && deceased &&
+            "border border-ink-faint/40 bg-paper-warm text-ink-soft"
         )}
       >
         {initials(name)}
@@ -839,7 +1000,7 @@ function PersonBadge({
         <span
           title={name}
           className={cn(
-            "text-center font-medium text-ink",
+            "text-center font-serif font-semibold text-ink",
             name.length > 20
               ? "line-clamp-3 text-[10px] leading-[11px]"
               : "line-clamp-2 text-xs leading-tight"
@@ -848,7 +1009,7 @@ function PersonBadge({
           {name}
         </span>
       </span>
-      <span className="h-3.5 text-[10px] leading-none text-ink-faint">
+      <span className="h-3.5 font-serif text-[10px] italic leading-none tracking-wide text-ink-faint">
         {years}
       </span>
     </span>
