@@ -219,8 +219,21 @@ function hoist(n: TreeNode): DisplayNode {
  * a couple whose spouse has parent cards) the in-law branch above-right.
  * Everything is relative to this branch's card center.
  */
-function layoutBranch(n: TreeNode): BranchLayout {
-  const kids = n.children.map(layoutBranch);
+function layoutBranch(n: TreeNode, edgeHint: -1 | 0 | 1 = 0): BranchLayout {
+  // Children learn whether they sit on the open left or right flank of
+  // their sibling row, so their in-laws can favor the roomy side.
+  const kids = n.children.map((c, i) =>
+    layoutBranch(
+      c,
+      n.children.length > 1
+        ? i === 0
+          ? -1
+          : i === n.children.length - 1
+            ? 1
+            : 0
+        : edgeHint
+    )
+  );
 
   // Pack siblings left-to-right: each slides until its outline is one gap
   // clear of everything already placed. Keeping sibling order, deeper rows
@@ -288,8 +301,11 @@ function layoutBranch(n: TreeNode): BranchLayout {
     const left = packOffset(shape, inLaws.shape, drow, -near - anchor.dx, -1);
     // Whichever side keeps the in-law couple closest to their child wins —
     // predictable adjacency reads better than a marginally narrower chart.
-    const useLeft =
-      Math.abs(left + anchor.dx) < Math.abs(right + anchor.dx);
+    // On a near-tie, a leftmost sibling sends their in-laws into the open
+    // space on the left (flipping the couple), a rightmost to the right.
+    const dl = Math.abs(left + anchor.dx);
+    const dr = Math.abs(right + anchor.dx);
+    const useLeft = edgeHint === -1 ? dl <= dr : dl < dr;
     const dxSp = useLeft ? left : right;
     const flip = dxSp + anchor.dx < 0;
     self.flip = flip;
