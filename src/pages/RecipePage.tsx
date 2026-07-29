@@ -61,17 +61,23 @@ export default function RecipePage() {
   return (
     <main className="mx-auto max-w-3xl px-4 pb-24 pt-4">
       {photo && (
-        <img
-          src={photo}
-          alt={recipe.title}
-          className="mb-4 h-52 w-full rounded-xl object-cover sm:h-72"
-        />
+        <div className="mb-4 rounded-2xl border border-[#dcc9a8] bg-[#fffdf8] p-1.5 shadow-[0_1px_2px_rgba(78,59,33,0.06),0_6px_16px_-6px_rgba(78,59,33,0.14)]">
+          <img
+            src={photo}
+            alt={recipe.title}
+            className="h-52 w-full rounded-[10px] object-cover sm:h-72"
+          />
+        </div>
       )}
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h1 className="text-3xl leading-tight">{recipe.title}</h1>
+          <h1 className="text-[34px] leading-tight tracking-[-0.01em]">
+            {recipe.title}
+          </h1>
           {recipe.credit && (
-            <p className="mt-1 text-ink-soft">From {recipe.credit}</p>
+            <p className="mt-1 font-serif italic text-ink-soft">
+              From {recipe.credit}
+            </p>
           )}
         </div>
         {isFamily && (
@@ -86,7 +92,11 @@ export default function RecipePage() {
       <div className="mt-2 flex flex-wrap gap-1.5">
         <Badge>{recipe.category}</Badge>
         {formatCostPerServing(recipe.cost_per_serving) && (
-          <Badge variant="outline" title="Rough estimate at US grocery prices">
+          <Badge
+            variant="outline"
+            className="border-[#dcc9a8] bg-[#fffdf8] tabular-nums text-ink-soft"
+            title="Rough estimate at US grocery prices"
+          >
             {formatCostPerServing(recipe.cost_per_serving)} est.
           </Badge>
         )}
@@ -96,6 +106,7 @@ export default function RecipePage() {
           </Badge>
         ))}
       </div>
+      <div className="mt-4 h-px bg-gradient-to-r from-[#dcc9a8] via-[#dcc9a8]/50 to-transparent" />
       {recipe.source_url && (
         <a
           href={recipe.source_url}
@@ -117,8 +128,10 @@ export default function RecipePage() {
       </div>
 
       <section className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl">Ingredients</h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="flex flex-1 items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-[#dcc9a8]">
+            Ingredients
+          </h2>
           <UnitToggle value={units} onChange={setUnits} />
         </div>
         <IngredientList
@@ -129,11 +142,13 @@ export default function RecipePage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="mb-3 text-xl">Steps</h2>
+        <h2 className="mb-4 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-[#dcc9a8]">
+          Steps
+        </h2>
         <ol className="space-y-3">
           {recipe.steps.map((step, i) => (
             <li key={i} className="flex gap-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft font-serif text-sm font-semibold text-accent-dark">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/25 bg-accent-soft font-serif text-sm font-semibold text-accent-dark shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
                 {i + 1}
               </span>
               <p className="leading-relaxed">
@@ -145,16 +160,18 @@ export default function RecipePage() {
       </section>
 
       {recipe.notes && (
-        <section className="mt-6 rounded-xl bg-paper-warm p-4">
-          <h2 className="mb-1 text-lg">Notes</h2>
-          <p className="whitespace-pre-wrap leading-relaxed text-ink-soft">
+        <section className="mt-8 rounded-xl border border-dashed border-[#dcc9a8] bg-paper-warm/70 p-4">
+          <h2 className="mb-1.5 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80">
+            Notes
+          </h2>
+          <p className="whitespace-pre-wrap font-serif italic leading-relaxed text-ink-soft">
             {units === "metric" ? convertTemperatures(recipe.notes) : recipe.notes}
           </p>
         </section>
       )}
 
       {/* Sits above the phone tab bar; flush with the bottom on larger screens. */}
-      <div className="fixed inset-x-0 bottom-16 z-10 border-t border-paper-deep bg-paper/95 p-3 backdrop-blur sm:bottom-0">
+      <div className="fixed inset-x-0 bottom-16 z-10 border-t border-[#dcc9a8] bg-paper/90 p-3 shadow-[0_-4px_16px_-8px_rgba(78,59,33,0.25)] backdrop-blur sm:bottom-0">
         <div className="mx-auto max-w-3xl">
           <Button size="lg" className="w-full" onClick={() => setCooking(true)}>
             <ChefHat className="h-5 w-5" />

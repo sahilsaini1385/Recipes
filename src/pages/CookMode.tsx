@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { IngredientLine } from "@/components/IngredientList";
 import { UnitToggle } from "@/components/UnitToggle";
 import { useWakeLock } from "@/hooks/useWakeLock";
@@ -46,12 +46,12 @@ export function CookMode({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-paper">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-paper-deep bg-paper px-4 py-3">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#dcc9a8] bg-paper/95 px-4 py-3 backdrop-blur">
         <div>
           <h1 className="font-serif text-xl font-semibold leading-tight">
             {recipe.title}
           </h1>
-          <p className="text-sm text-ink-soft">
+          <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-faint">
             {servings} {servings === 1 ? "serving" : "servings"}
           </p>
         </div>
@@ -68,23 +68,30 @@ export function CookMode({
       </div>
 
       <div className="mx-auto max-w-2xl px-4 pb-24 pt-4">
-        <h2 className="mb-3 text-2xl">Ingredients</h2>
+        <h2 className="mb-3 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-[#dcc9a8]">
+          Ingredients
+        </h2>
         <ul className="space-y-1">
           {recipe.ingredients.map((ing, i) => (
             <li key={i}>
               <button
                 onClick={() => toggleIngredient(i)}
-                className="flex w-full items-start gap-3 rounded-lg px-2 py-2.5 text-left text-xl leading-relaxed hover:bg-paper-warm"
+                className={cn(
+                  "flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-xl leading-relaxed transition-colors",
+                  checkedIngredients.has(i) ? "bg-paper-warm/60" : "hover:bg-paper-warm"
+                )}
               >
                 <span
                   className={cn(
-                    "mt-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded border-2",
+                    "mt-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2",
                     checkedIngredients.has(i)
                       ? "border-accent bg-accent text-white"
-                      : "border-ink-faint/50"
+                      : "border-[#c9b891]"
                   )}
                 >
-                  {checkedIngredients.has(i) && "✓"}
+                  {checkedIngredients.has(i) && (
+                    <Check className="h-4 w-4" strokeWidth={3} />
+                  )}
                 </span>
                 <span
                   className={cn(
@@ -102,13 +109,18 @@ export function CookMode({
           ))}
         </ul>
 
-        <h2 className="mb-3 mt-8 text-2xl">Steps</h2>
+        <h2 className="mb-3 mt-8 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-[#dcc9a8]">
+          Steps
+        </h2>
         <ol className="space-y-2">
           {recipe.steps.map((step, i) => (
             <li key={i}>
               <button
                 onClick={() => toggleStep(i)}
-                className="flex w-full items-start gap-3 rounded-lg px-2 py-3 text-left text-xl leading-relaxed hover:bg-paper-warm"
+                className={cn(
+                  "flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left text-xl leading-relaxed transition-colors",
+                  checkedSteps.has(i) ? "bg-paper-warm/60" : "hover:bg-paper-warm"
+                )}
               >
                 <span
                   className={cn(

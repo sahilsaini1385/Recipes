@@ -100,17 +100,45 @@ export default function Passport() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16 pt-5">
-      <div className="mb-3 rounded-2xl bg-gradient-to-br from-accent to-accent-dark p-5 text-white shadow-card">
-        <div className="flex items-center gap-2">
-          <Globe className="h-6 w-6" />
-          <h1 className="font-serif text-2xl font-semibold">Family Passport</h1>
+      <div className="relative mb-3 overflow-hidden rounded-2xl bg-gradient-to-br from-accent to-accent-dark p-5 pt-6 text-white shadow-[0_1px_2px_rgba(78,59,33,0.10),0_10px_28px_-8px_rgba(122,44,0,0.45)]">
+        {/* Debossed sheen + grain, pure CSS — reads as a tooled cover. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(120% 90% at 50% 0%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 55%), radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1.6px)",
+            backgroundSize: "auto, 12px 12px",
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-2 rounded-[12px] border border-white/30"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-[13px] rounded-lg border border-white/10"
+        />
+        <div className="relative">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-white/75">
+          Jungman Family
+        </p>
+        <div className="mt-0.5 flex items-center gap-2">
+          <Globe className="h-5 w-5 text-white/85" />
+          <h1 className="font-serif text-2xl font-semibold tracking-wide">
+            Family Passport
+          </h1>
         </div>
-        <p className="mt-1 text-white/90">
-          Together the Jungmans have been to <strong>{familyTotal}</strong> of{" "}
-          {Math.max(target, familyTotal)} {isCountry ? "countries" : "US states"}.
+        <p className="mt-2 text-[15px] text-white/90">
+          Together the Jungmans have been to{" "}
+          <strong className="font-serif text-[26px] font-semibold leading-none">
+            {familyTotal}
+          </strong>{" "}
+          of {Math.max(target, familyTotal)}{" "}
+          {isCountry ? "countries" : "US states"}.
         </p>
         <ProgressTrack count={familyTotal} target={target} tone="light" />
-        <div className="mt-4 inline-flex rounded-lg bg-white/15 p-0.5">
+        <div className="mt-4 inline-flex rounded-lg border border-white/25 bg-white/10 p-0.5">
           {(
             [
               ["country", "Countries"],
@@ -121,18 +149,19 @@ export default function Passport() {
               key={k}
               onClick={() => setKind(k)}
               className={cn(
-                "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                kind === k ? "bg-white text-accent-dark" : "text-white/90"
+                "min-h-10 rounded-md px-3.5 text-[12px] font-semibold uppercase tracking-[0.12em] transition-colors",
+                kind === k ? "bg-[#fffdf8] text-accent-dark shadow-sm" : "text-white/85"
               )}
             >
               {lbl}
             </button>
           ))}
         </div>
+        </div>
       </div>
 
-      <div className="mb-4 flex items-center justify-between px-1 text-xs text-ink-soft">
-        <span>
+      <div className="mb-4 flex min-h-10 items-center justify-between px-1">
+        <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink-faint">
           {syncing
             ? "Updating from the family Google Sheet…"
             : "Kept in sync with the family Google Sheet"}
@@ -141,7 +170,7 @@ export default function Passport() {
           <button
             onClick={() => sync(true)}
             disabled={syncing}
-            className="inline-flex items-center gap-1 text-accent-dark disabled:opacity-50"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent-dark hover:bg-[#fae7d4]/60 disabled:opacity-50"
           >
             <RefreshCw className={cn("h-3 w-3", syncing && "animate-spin")} />
             Sync now
@@ -161,9 +190,10 @@ export default function Passport() {
             </p>
           )}
 
-          {visibleMembers.map((member) => (
+          {visibleMembers.map((member, i) => (
             <MemberCard
               key={member.id}
+              rank={i + 1}
               member={member}
               kind={kind}
               codes={visitsFor(member.id)}
@@ -183,7 +213,7 @@ export default function Passport() {
           {collapseZero && (
             <button
               onClick={() => setShowAllMembers(true)}
-              className="w-full rounded-2xl border border-dashed border-paper-deep px-4 py-3 text-sm text-ink-soft hover:bg-paper-warm"
+              className="w-full rounded-2xl border border-dashed border-[#c9b58f] bg-paper-warm/40 px-4 py-3.5 font-serif text-sm italic text-ink-soft transition-colors hover:border-accent/40 hover:bg-paper-warm"
             >
               {zeroMembers.map((m) => firstMemberName(m.name)).join(", ")}{" "}
               {zeroMembers.length === 1 ? "hasn't" : "haven't"} logged any{" "}
@@ -194,7 +224,7 @@ export default function Passport() {
           {showAllMembers && zeroMembers.length >= 2 && (
             <button
               onClick={() => setShowAllMembers(false)}
-              className="w-full py-1 text-center text-xs text-ink-faint"
+              className="min-h-10 w-full text-center text-[11px] font-medium uppercase tracking-[0.12em] text-ink-faint"
             >
               Hide empty passports
             </button>
@@ -253,21 +283,22 @@ function ProgressTrack({
   const planePct = Math.max(2.5, Math.min(97.5, pct));
   const light = tone === "light";
   return (
-    <div className="relative mt-3 mb-1">
+    <div className="relative mt-3 mb-1 h-5">
+      {/* The unflown route is a dashed hairline; the flown part fills solid. */}
+      <div
+        aria-hidden
+        className={cn(
+          "absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed",
+          light ? "border-white/40" : "border-[#d8c5a5]"
+        )}
+      />
       <div
         className={cn(
-          "h-2 overflow-hidden rounded-full",
-          light ? "bg-white/25" : "bg-paper-deep"
+          "absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full transition-all duration-700",
+          light ? "bg-white" : "bg-gradient-to-r from-accent to-accent-dark"
         )}
-      >
-        <div
-          className={cn(
-            "h-full rounded-full transition-all duration-700",
-            light ? "bg-white" : "bg-gradient-to-r from-accent to-accent-dark"
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+        style={{ width: `${pct}%` }}
+      />
       <Plane
         aria-hidden
         className={cn(
@@ -282,6 +313,7 @@ function ProgressTrack({
 }
 
 function MemberCard({
+  rank,
   member,
   kind,
   codes,
@@ -296,6 +328,7 @@ function MemberCard({
   onRemove,
   onDelete,
 }: {
+  rank: number;
   member: FamilyMember;
   kind: PlaceKind;
   codes: Set<string>;
@@ -318,25 +351,41 @@ function MemberCard({
   );
 
   return (
-    <Card className="p-4">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-serif text-xl font-medium text-ink">
-          {member.name}
-        </h2>
-        <p className="text-sm text-ink-soft">
-          <strong className="text-base text-ink">{codes.size}</strong> of{" "}
-          {Math.max(target, codes.size)}
+    <Card className="border-[#dcc9a8] bg-[#fffdf8] p-4 shadow-[0_1px_2px_rgba(78,59,33,0.06),0_6px_16px_-6px_rgba(78,59,33,0.14)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_4px_rgba(78,59,33,0.07),0_10px_24px_-6px_rgba(191,87,0,0.16)]">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={cn(
+              "flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border px-1 font-serif text-[11px] font-semibold",
+              rank <= 3
+                ? "border-accent/35 bg-[#fae7d4] text-accent-dark"
+                : "border-paper-deep bg-paper-warm text-ink-faint"
+            )}
+          >
+            {rank}
+          </span>
+          <h2 className="truncate font-serif text-xl font-medium text-ink">
+            {member.name}
+          </h2>
+        </div>
+        <p className="shrink-0 text-sm text-ink-soft">
+          <strong className="font-serif text-xl font-semibold leading-none text-ink">
+            {codes.size}
+          </strong>{" "}
+          <span className="font-serif text-xs italic text-ink-faint">
+            of {Math.max(target, codes.size)}
+          </span>
         </p>
       </div>
 
       <ProgressTrack count={codes.size} target={target} tone="dark" />
 
       {codes.size === 0 && !canEdit ? (
-        <p className="mt-1 py-1.5 text-sm text-ink-faint">No {unitPlural} yet</p>
+        <p className="mt-1 py-1.5 font-serif text-sm italic text-ink-faint">No {unitPlural} yet</p>
       ) : (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="-mb-1.5 mt-1 inline-flex items-center gap-1 py-1.5 text-sm font-medium text-accent-dark"
+          className="-mb-1.5 mt-0.5 inline-flex min-h-10 items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-dark"
         >
           {expanded ? (
             <>
@@ -361,7 +410,7 @@ function MemberCard({
                 <span
                   key={code}
                   className={cn(
-                    "inline-flex items-center gap-1 rounded-full bg-paper-warm py-1 pl-2 text-sm",
+                    "inline-flex items-center gap-1.5 rounded-[6px] border border-[#dcc9a8] bg-paper/70 py-1 pl-2 text-[13px] text-ink",
                     canEdit ? "pr-1" : "pr-2"
                   )}
                 >
@@ -450,7 +499,7 @@ function PlacePicker({
   }, [q, existing, dataset]);
 
   return (
-    <div className="mt-3 rounded-xl border border-paper-deep bg-paper-warm p-2">
+    <div className="mt-3 rounded-xl border border-[#dcc9a8] bg-paper p-2 shadow-[inset_0_1px_3px_rgba(78,59,33,0.07)]">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
         <Input
@@ -469,7 +518,7 @@ function PlacePicker({
               onPick(c.code);
               setQ("");
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-white"
+            className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-ink hover:bg-[#fffdf8] active:bg-[#fae7d4]"
           >
             {symbol(c.code) && (
               <span className="text-lg leading-none">{symbol(c.code)}</span>

@@ -61,7 +61,7 @@ export function IngredientLine({
         {body}
         {note && <span className="text-ink-faint"> {note}</span>}
         {line.showHint && (
-          <span className="ml-1 text-xs italic text-ink-faint">
+          <span className="ml-1 font-serif text-xs italic text-ink-faint">
             — adjust to taste when scaling
           </span>
         )}
@@ -89,7 +89,7 @@ export function IngredientLine({
     <span>
       <span className="font-semibold">{amountText}</span> {ingredient.item}
       {line.approx && (
-        <span className="text-xs italic text-ink-faint"> approx</span>
+        <span className="font-serif text-xs italic text-ink-faint"> approx</span>
       )}
       {ingredient.note && (
         <span className="text-ink-faint">, {ingredient.note}</span>
@@ -103,7 +103,7 @@ export function IngredientList({ ingredients, factor, units = "us" }: Props) {
     <ul className="space-y-2">
       {ingredients.map((ing, i) => (
         <li key={i} className="flex gap-2 text-base leading-relaxed">
-          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+          <span className="mt-[9px] h-[5px] w-[5px] shrink-0 rotate-45 bg-accent/70" />
           <IngredientLine ingredient={ing} factor={factor} units={units} />
         </li>
       ))}

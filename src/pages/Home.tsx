@@ -57,7 +57,7 @@ export default function Home() {
           placeholder="Search recipes and ingredients…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="h-12 rounded-full pl-10 shadow-sm"
+          className="h-12 rounded-full border-[#dcc9a8] bg-[#fffdf8] pl-10 shadow-[inset_0_1px_2px_rgba(78,59,33,0.05)] placeholder:font-serif placeholder:italic placeholder:text-ink-faint focus-visible:ring-accent/60"
         />
       </div>
 
@@ -68,8 +68,8 @@ export default function Home() {
           className={cn(
             "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95",
             favoritesOnly
-              ? "border-accent bg-accent text-white shadow-sm"
-              : "border-paper-deep bg-white text-ink hover:border-accent/40"
+              ? "border-accent-dark/40 bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(78,59,33,0.18)]"
+              : "border-[#dcc9a8] bg-[#fffdf8] text-ink-soft hover:border-accent/40 hover:text-ink"
           )}
         >
           <Heart
@@ -84,8 +84,8 @@ export default function Home() {
               className={cn(
                 "rounded-full px-1.5 text-xs",
                 favoritesOnly
-                  ? "bg-white/25 text-white"
-                  : "bg-paper-warm text-ink-soft"
+                  ? "bg-white/25 text-[11px] tabular-nums text-white"
+                  : "bg-paper-warm text-[11px] tabular-nums text-ink-faint"
               )}
             >
               {favoriteCount}
@@ -121,11 +121,16 @@ export default function Home() {
         </div>
       )}
       {!loading && !error && filtered.length === 0 && (
-        <p className="mt-10 text-center text-ink-soft">
-          {recipes && recipes.length === 0
-            ? "No recipes yet. Sign in and add the first one."
-            : "No recipes match."}
-        </p>
+        <div className="mt-10 rounded-2xl border border-dashed border-[#dcc9a8] bg-[#fffdf8]/60 px-6 py-10 text-center">
+          <p className="font-serif italic text-ink-soft">
+            {recipes && recipes.length === 0
+              ? "No recipes yet. Sign in and add the first one."
+              : "No recipes match."}
+          </p>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-ink-faint">
+            Try another search or category
+          </p>
+        </div>
       )}
 
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -159,15 +164,15 @@ function CategoryChip({
       className={cn(
         "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95",
         active
-          ? "border-accent bg-accent text-white shadow-sm"
-          : "border-paper-deep bg-white text-ink hover:border-accent/40"
+          ? "border-accent-dark/40 bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(78,59,33,0.18)]"
+          : "border-[#dcc9a8] bg-[#fffdf8] text-ink-soft hover:border-accent/40 hover:text-ink"
       )}
     >
       {label}
       <span
         className={cn(
           "rounded-full px-1.5 text-xs",
-          active ? "bg-white/25 text-white" : "bg-paper-warm text-ink-soft"
+          active ? "bg-white/25 text-[11px] tabular-nums text-white" : "bg-paper-warm text-[11px] tabular-nums text-ink-faint"
         )}
       >
         {count}

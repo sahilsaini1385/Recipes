@@ -17,7 +17,7 @@ export function UnitToggle({ value, onChange, className }: Props) {
       role="group"
       aria-label="Measurement units"
       className={cn(
-        "inline-flex rounded-lg border border-paper-deep bg-white p-0.5",
+        "inline-flex rounded-full border border-[#dcc9a8] bg-[#fffdf8] p-0.5",
         className
       )}
     >
@@ -27,9 +27,9 @@ export function UnitToggle({ value, onChange, className }: Props) {
           onClick={() => onChange(opt.key)}
           aria-pressed={value === opt.key}
           className={cn(
-            "h-9 rounded-md px-3 text-sm font-medium",
+            "h-9 rounded-full px-3 text-sm font-medium",
             value === opt.key
-              ? "bg-accent text-white"
+              ? "bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
               : "text-ink-soft hover:bg-paper-warm"
           )}
         >
