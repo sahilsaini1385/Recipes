@@ -1,182 +1,264 @@
-import { useMemo, useState } from "react";
-import { Search, Heart } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ArrowRight,
+  ClipboardPaste,
+  Link2,
+  Loader2,
+  MapPin,
+  Sparkles,
+} from "lucide-react";
+import AppHeader from "@/components/AppHeader";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RecipeCard } from "@/components/RecipeCard";
-import { useRecipes } from "@/hooks/useRecipes";
-import { useFavorites } from "@/hooks/useFavorites";
-import { useCostEstimates } from "@/hooks/useCostEstimates";
-import { CATEGORIES } from "@/lib/categories";
-import { cn } from "@/lib/utils";
-import type { Recipe } from "@/lib/types";
-
-function matchesQuery(recipe: Recipe, q: string): boolean {
-  const needle = q.toLowerCase();
-  if (recipe.title.toLowerCase().includes(needle)) return true;
-  return recipe.ingredients.some(
-    (i) =>
-      i.raw.toLowerCase().includes(needle) ||
-      i.item.toLowerCase().includes(needle)
-  );
-}
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/useAuth";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import {
+  ArticleFetchError,
+  listItineraries,
+  parseArticle,
+  saveItinerary,
+  type ItinerarySummary,
+} from "@/lib/itineraries";
+import { sampleItinerary } from "@/lib/sampleParis";
 
 export default function Home() {
-  const { recipes, loading, error, reload } = useRecipes();
-  const { favorites, toggle } = useFavorites();
-  useCostEstimates(); // quietly backfills missing cost estimates
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<string | null>(null);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const navigate = useNavigate();
+  const { session, isFamily, loading: authLoading } = useAuth();
 
-  const counts = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const r of recipes ?? []) {
-      map.set(r.category, (map.get(r.category) ?? 0) + 1);
+  const [url, setUrl] = useState("");
+  const [text, setText] = useState("");
+  const [showPaste, setShowPaste] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<ItinerarySummary[]>([]);
+
+  useEffect(() => {
+    listItineraries()
+      .then(setSaved)
+      .catch(() => {});
+  }, []);
+
+  const canCreate = isSupabaseConfigured && session && isFamily;
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const trimmedUrl = url.trim();
+    const trimmedText = text.trim();
+    if (!showPaste && !trimmedUrl) return;
+    if (showPaste && !trimmedText) return;
+
+    setBusy(true);
+    setPhase(
+      showPaste ? "Reading the article…" : "Fetching the article…"
+    );
+    const phaseTimer = window.setTimeout(
+      () =>
+        setPhase(
+          "Building your itinerary — finding every place, day by day. This can take a minute or two…"
+        ),
+      6000
+    );
+    try {
+      const itinerary = await parseArticle(
+        showPaste ? { text: trimmedText } : { url: trimmedUrl }
+      );
+      setPhase("Saving…");
+      const slug = await saveItinerary(itinerary, showPaste ? null : trimmedUrl);
+      navigate(`/t/${slug}`);
+    } catch (err) {
+      if (err instanceof ArticleFetchError) {
+        setShowPaste(true);
+        setError(
+          "That site wouldn't let us read the article directly. Open it in your browser, select all the text, and paste it below instead."
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      }
+    } finally {
+      window.clearTimeout(phaseTimer);
+      setBusy(false);
+      setPhase("");
     }
-    return map;
-  }, [recipes]);
-
-  const favoriteCount = useMemo(
-    () => (recipes ?? []).filter((r) => favorites.has(r.id)).length,
-    [recipes, favorites]
-  );
-
-  const filtered = useMemo(() => {
-    let list = recipes ?? [];
-    if (favoritesOnly) list = list.filter((r) => favorites.has(r.id));
-    if (category) list = list.filter((r) => r.category === category);
-    if (query.trim()) list = list.filter((r) => matchesQuery(r, query.trim()));
-    return list;
-  }, [recipes, category, favoritesOnly, query, favorites]);
+  }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-16 pt-5">
-      <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-        <Input
-          type="search"
-          placeholder="Search recipes and ingredients…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="h-12 rounded-full border-[#dcc9a8] bg-[#fffdf8] pl-10 shadow-[inset_0_1px_2px_rgba(78,59,33,0.05)] placeholder:font-serif placeholder:italic placeholder:text-ink-faint focus-visible:ring-accent/60"
-        />
-      </div>
+    <div className="min-h-screen pb-16">
+      <AppHeader />
 
-      {/* One row: Favorites toggle + category chips with counts */}
-      <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
-        <button
-          onClick={() => setFavoritesOnly(!favoritesOnly)}
-          className={cn(
-            "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95",
-            favoritesOnly
-              ? "border-accent-dark/40 bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(78,59,33,0.18)]"
-              : "border-[#dcc9a8] bg-[#fffdf8] text-ink-soft hover:border-accent/40 hover:text-ink"
-          )}
-        >
-          <Heart
-            className={cn(
-              "h-4 w-4",
-              favoritesOnly ? "fill-white text-white" : "text-accent"
-            )}
-          />
-          Favorites
-          {favoriteCount > 0 && (
-            <span
-              className={cn(
-                "rounded-full px-1.5 text-xs",
-                favoritesOnly
-                  ? "bg-white/25 text-[11px] tabular-nums text-white"
-                  : "bg-paper-warm text-[11px] tabular-nums text-ink-faint"
+      <main className="mx-auto max-w-3xl px-4">
+        <section className="pt-10 pb-8 text-center">
+          <h1 className="font-serif text-4xl font-semibold leading-tight sm:text-5xl">
+            Paste a travel article.
+            <br />
+            Get a mapped itinerary.
+          </h1>
+          <p className="mx-auto mt-4 max-w-xl text-ink-soft">
+            Drop in a link like a &ldquo;three perfect days in Paris&rdquo;
+            guide. Waypoint reads it, pulls out every café, museum, and
+            viewpoint, and builds a day-by-day plan with a map — ready on your
+            phone, with one-tap Google Maps directions and an export for Google
+            My Maps.
+          </p>
+        </section>
+
+        <section className="rounded-2xl border border-paper-deep bg-white p-4 shadow-card sm:p-6">
+          {!isSupabaseConfigured ? (
+            <p className="text-sm text-ink-soft">
+              <strong>Demo mode.</strong> Supabase isn&rsquo;t configured yet,
+              so creating new itineraries is off — but you can explore the{" "}
+              <Link to={`/t/${sampleItinerary.slug}`} className="font-medium text-accent">
+                sample Paris itinerary
+              </Link>{" "}
+              below. See the README for the 15-minute setup.
+            </p>
+          ) : !session && !authLoading ? (
+            <div className="flex flex-col items-center gap-3 py-2 text-center">
+              <p className="text-ink-soft">
+                Sign in to turn an article into an itinerary.
+              </p>
+              <Link to="/signin">
+                <Button>
+                  Sign in with email <ArrowRight size={16} />
+                </Button>
+              </Link>
+            </div>
+          ) : session && !isFamily && !authLoading ? (
+            <p className="text-sm text-ink-soft">
+              Your email isn&rsquo;t on the allowlist yet — ask the site owner
+              to add it (see README). You can still open any shared itinerary
+              link.
+            </p>
+          ) : (
+            <form onSubmit={onSubmit} className="space-y-3">
+              {!showPaste ? (
+                <div>
+                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                    <Link2 size={14} /> Article link
+                  </label>
+                  <Input
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://www.cntraveler.com/story/…"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    disabled={busy}
+                    required
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-ink-soft">
+                    <ClipboardPaste size={14} /> Article text
+                  </label>
+                  <Textarea
+                    placeholder="Paste the full article text here…"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    disabled={busy}
+                    rows={8}
+                    required
+                  />
+                </div>
               )}
-            >
-              {favoriteCount}
-            </span>
+
+              {error && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">
+                  {error}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="submit" disabled={busy || !canCreate}>
+                  {busy ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Working…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} /> Build itinerary
+                    </>
+                  )}
+                </Button>
+                <button
+                  type="button"
+                  className="text-sm text-ink-soft underline underline-offset-2 hover:text-ink"
+                  onClick={() => setShowPaste((v) => !v)}
+                  disabled={busy}
+                >
+                  {showPaste ? "Use a link instead" : "Paste the text instead"}
+                </button>
+              </div>
+
+              {busy && phase && (
+                <p className="text-sm text-ink-soft">{phase}</p>
+              )}
+            </form>
           )}
-        </button>
-        <CategoryChip
-          label="All"
-          count={recipes?.length ?? 0}
-          active={category === null}
-          onClick={() => setCategory(null)}
-        />
-        {CATEGORIES.map((c) => (
-          <CategoryChip
-            key={c}
-            label={c}
-            count={counts.get(c) ?? 0}
-            active={category === c}
-            onClick={() => setCategory(category === c ? null : c)}
-          />
-        ))}
-      </div>
+        </section>
 
-      {loading && (
-        <p className="mt-10 text-center text-ink-soft">Loading recipes…</p>
-      )}
-      {error && (
-        <div className="mt-10 text-center">
-          <p className="text-red-700">Could not load recipes: {error}</p>
-          <button className="mt-2 text-accent underline" onClick={reload}>
-            Try again
-          </button>
-        </div>
-      )}
-      {!loading && !error && filtered.length === 0 && (
-        <div className="mt-10 rounded-2xl border border-dashed border-[#dcc9a8] bg-[#fffdf8]/60 px-6 py-10 text-center">
-          <p className="font-serif italic text-ink-soft">
-            {recipes && recipes.length === 0
-              ? "No recipes yet. Sign in and add the first one."
-              : "No recipes match."}
-          </p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-ink-faint">
-            Try another search or category
-          </p>
-        </div>
-      )}
-
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {filtered.map((r) => (
-          <RecipeCard
-            key={r.id}
-            recipe={r}
-            isFavorite={favorites.has(r.id)}
-            onToggleFavorite={toggle}
-          />
-        ))}
-      </div>
-    </main>
+        <section className="mt-10">
+          <h2 className="mb-3 font-serif text-2xl font-semibold">
+            Your itineraries
+          </h2>
+          <ul className="space-y-2.5">
+            <li>
+              <ItineraryLink
+                slug={sampleItinerary.slug}
+                title={sampleItinerary.title}
+                destination={`${sampleItinerary.destination} · built-in sample`}
+              />
+            </li>
+            {saved.map((it) => (
+              <li key={it.id}>
+                <ItineraryLink
+                  slug={it.slug}
+                  title={it.title}
+                  destination={it.destination}
+                />
+              </li>
+            ))}
+          </ul>
+          {isSupabaseConfigured && saved.length === 0 && (
+            <p className="mt-3 text-sm text-ink-faint">
+              Itineraries you create will appear here — open this page on your
+              phone to take them with you.
+            </p>
+          )}
+        </section>
+      </main>
+    </div>
   );
 }
 
-function CategoryChip({
-  label,
-  count,
-  active,
-  onClick,
+function ItineraryLink({
+  slug,
+  title,
+  destination,
 }: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
+  slug: string;
+  title: string;
+  destination: string;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95",
-        active
-          ? "border-accent-dark/40 bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(78,59,33,0.18)]"
-          : "border-[#dcc9a8] bg-[#fffdf8] text-ink-soft hover:border-accent/40 hover:text-ink"
-      )}
+    <Link
+      to={`/t/${slug}`}
+      className="flex items-center gap-3 rounded-xl border border-paper-deep bg-white px-4 py-3 shadow-card transition-shadow hover:shadow-card-hover"
     >
-      {label}
-      <span
-        className={cn(
-          "rounded-full px-1.5 text-xs",
-          active ? "bg-white/25 text-[11px] tabular-nums text-white" : "bg-paper-warm text-[11px] tabular-nums text-ink-faint"
-        )}
-      >
-        {count}
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+        <MapPin size={17} />
       </span>
-    </button>
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{title}</span>
+        <span className="block truncate text-sm text-ink-soft">
+          {destination}
+        </span>
+      </span>
+      <ArrowRight size={16} className="ml-auto shrink-0 text-ink-faint" />
+    </Link>
   );
 }

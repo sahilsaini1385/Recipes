@@ -1,14 +1,31 @@
-# Jungman Family Recipes
+# Waypoint — travel articles into itineraries
 
-A mobile-first family recipe website. Browse and search recipes, rescale any
-recipe's ingredient amounts to a chosen number of servings, and let family
-members add new recipes — by structured form, by pasting text, or by
-uploading a photo, PDF, Word file, or a whole .zip of recipe documents that
-get parsed automatically (with duplicate collapsing and per-recipe review).
+Paste a link to a travel article (say, an "insider's guide to three perfect
+days in Paris") and Waypoint reads it, pulls out every café, museum, bar, and
+viewpoint it recommends, and turns it into a day-by-day itinerary you can open
+on your phone:
 
-**Stack:** React + Vite + Tailwind (shadcn-style components) · Supabase
-(Postgres, Storage, magic-link auth, Edge Functions) · Anthropic API for smart
-import · deployable to Vercel or Netlify on free tiers.
+- **A map of every stop** — numbered, color-coded pins per day (OpenStreetMap,
+  no API key needed), with day filtering.
+- **One-tap Google Maps** — open any stop in the Google Maps app, get walking
+  directions to it, or open a whole day as a chained walking route.
+- **Google My Maps export** — download the itinerary as a KML file and import
+  it at [mymaps.google.com](https://mymaps.google.com); each day becomes a
+  toggleable layer of pins with the article's notes attached, and the map then
+  shows up in the Google Maps app on your phone under **You → Maps**.
+- **Shareable links** — every itinerary gets an unguessable URL you can send
+  to travel companions; the site is mobile-first and installable to the home
+  screen.
+- If a site won't let us fetch the article (hard paywall, JS-only rendering),
+  the app falls back to letting you paste the article text.
+
+**Stack:** React + Vite + Tailwind · Leaflet/OpenStreetMap · Supabase
+(Postgres, magic-link auth, Edge Functions) · Anthropic API (Claude reads the
+article and does the extraction — the key stays server-side) · deployable to
+Vercel or Netlify on free tiers.
+
+There's a built-in sample (`/t/sample-three-days-paris`) so you can explore
+the UI before any setup.
 
 ---
 
@@ -16,22 +33,25 @@ import · deployable to Vercel or Netlify on free tiers.
 
 ### 1. Supabase project
 
-1. Create a free project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor**, paste the contents of
-   `supabase/migrations/00001_init.sql`, and run it. This creates:
-   - the `recipes` and `favorites` tables with Row Level Security
-     (everyone reads, only allowlisted family members write),
-   - the `allowed_emails` allowlist (seeded with `ss3694@cornell.edu`),
-   - the public `recipe-photos` storage bucket and its policies.
-3. Add more family members to the allowlist (SQL Editor):
-   ```sql
-   insert into allowed_emails (email) values ('mom@example.com'), ('dad@example.com');
-   ```
-4. In **Authentication → URL Configuration**, set the Site URL to your
-   deployed URL (add it again after step 3 below if you don't know it yet).
-   Email magic-link auth is enabled by default.
+You can reuse the same Supabase project as the family recipes site — the
+migration is idempotent and shares its allowlist — or create a fresh free
+project at [supabase.com](https://supabase.com).
 
-### 2. Smart import edge function
+1. Open **SQL Editor**, paste the contents of
+   `supabase/migrations/00001_travel_init.sql`, and run it. This creates:
+   - the `itineraries` table with Row Level Security (anyone with a link can
+     read; only allowlisted users can create/delete),
+   - the `allowed_emails` allowlist (seeded with `ss3694@cornell.edu`) and the
+     `is_family()` helper, if they don't already exist.
+2. Add more editors (SQL Editor):
+   ```sql
+   insert into allowed_emails (email) values ('friend@example.com');
+   ```
+3. In **Authentication → URL Configuration**, set the Site URL to your
+   deployed URL (you can come back after step 3). Magic-link email auth is on
+   by default.
+
+### 2. The article-parsing edge function
 
 Requires the [Supabase CLI](https://supabase.com/docs/guides/cli) and an
 Anthropic API key:
@@ -40,53 +60,40 @@ Anthropic API key:
 supabase login
 supabase link --project-ref YOUR-PROJECT-REF
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-supabase functions deploy parse-recipe
+supabase functions deploy parse-itinerary
 ```
 
-The key is stored as a server-side secret and never reaches the browser. The
-function also requires a signed-in, allowlisted user, so it can't be abused
-by strangers.
+The key is stored as a server-side secret and never reaches the browser, and
+the function requires a signed-in, allowlisted user, so strangers can't run up
+your bill. The function also fetches article pages server-side, which is what
+lets a URL paste work at all (browsers would be blocked by CORS).
 
-(If you skip this step, everything else still works — only the "Import" tab
-will error. The structured form never touches the LLM.)
+### 3. Deploy the site (Vercel shown; Netlify config included too)
 
-### 3. Deploy the site (Vercel shown; Netlify config is included too)
-
-1. Push this repo to GitHub and import it at [vercel.com](https://vercel.com).
-2. Framework preset: **Vite**. Add two environment variables (from your
-   Supabase project's **Settings → API**):
+1. Import this repo/branch at [vercel.com](https://vercel.com). Framework
+   preset: **Vite**.
+2. Add two environment variables (from Supabase **Settings → API**):
    - `VITE_SUPABASE_URL` — the project URL
-   - `VITE_SUPABASE_ANON_KEY` — the anon/public key (safe to expose; all
-     access control is enforced by RLS in Postgres)
-3. Deploy. You get a shareable `*.vercel.app` URL that works on phones.
-4. Go back to Supabase **Authentication → URL Configuration** and set the
-   Site URL (and Redirect URL) to that deployed URL so magic links land on
-   the live site.
-
-### 4. Seed data (optional)
-
-If you have a `recipes.json` file (an array of recipe objects matching the
-schema in `src/lib/types.ts`), import it once:
-
-```sh
-SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co \
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key \
-node scripts/seed.mjs recipes.json
-```
-
-The seed is idempotent and de-duplicates by normalized title ("Copy of X",
-"X (1)", and the same recipe saved as both .doc and .docx collapse to one,
-keeping the most complete version). Entries with no ingredients and no steps
-are skipped as non-recipes. Re-running never creates duplicates.
-
-Don't have a `recipes.json`? The easier path is the app's **Import** tab: it
-accepts pasted text, photos, PDFs, .docx/.doc/.txt files — or a whole **.zip**
-of the family collection. Zips are unpacked in the browser, every document is
-parsed, "Copy of X" / "(1)" / .doc-vs-.docx duplicates are collapsed keeping
-the most complete version, and you review each recipe before it saves.
-(Requires the parse-recipe edge function from step 2.)
+   - `VITE_SUPABASE_ANON_KEY` — the anon/public key (safe to expose; access
+     control is enforced by RLS in Postgres)
+3. Deploy, then set that URL as the Site URL in Supabase Authentication (step
+   1.3) so magic links land on the live site.
 
 ---
+
+## Using it on your phone
+
+- Open the deployed URL, sign in once, and **Add to Home Screen** — the app is
+  installable and every saved itinerary is on the home page.
+- Each stop card's **Google Maps** / **Directions** buttons deep-link into the
+  Google Maps app using the place's *name and address* (not just coordinates),
+  so navigation goes to the actual venue.
+- **Walking route** links chain a whole day into one Google Maps directions
+  request (long days are split into continuous legs — Google caps a single
+  link at 11 stops).
+- For a true custom map, use **Google My Maps → Download KML**, import it at
+  mymaps.google.com (easiest on a computer), and it appears in the Google Maps
+  app under **You → Maps**.
 
 ## Local development
 
@@ -97,33 +104,34 @@ npm run dev
 ```
 
 ```sh
-npm test        # unit tests for the serving scaler and ingredient parser
+npm test        # unit tests for the KML export and Google Maps link builders
 npm run build   # production build (dist/)
 ```
 
-## How the serving scaler works
+Without a `.env` the app runs in demo mode: the sample itinerary works,
+creation is disabled.
 
-- Each recipe stores `base_servings`; the page-level control changes a local
-  target and every ingredient re-renders live. Nothing is written back to the
-  database.
-- Scale factor = `target / base`. Only ingredients with a parsed numeric
-  `quantity` are multiplied.
-- Amounts format like a cookbook: fractions in halves/thirds/quarters/eighths
-  (`0.75 → ¾`, `1.333 → 1⅓`), whole numbers stay whole, and ranges scale both
-  ends (`2 to 3 cloves → 4–6`).
-- Countable items with no unit (eggs, cloves) round to the nearest half and
-  show "approx" when rounded — never "1.333 eggs".
-- Lines with units like *can, stick, package, pinch, dash* or notes like *to
-  taste* are shown verbatim with a muted "adjust to taste when scaling" hint.
-  No numbers are invented.
+## How the parsing works
+
+`supabase/functions/parse-itinerary` fetches the article (preferring the full
+`articleBody` that publishers embed in JSON-LD, falling back to stripped page
+text), then asks Claude for a structured itinerary: days, ordered stops,
+descriptions and insider tips paraphrased from the article, and coordinates
+for each venue. Structured outputs guarantee schema-valid JSON. Pin
+coordinates come from the model's knowledge of the venues — famous places are
+precise; anything it only knows at neighborhood level is flagged `approx` —
+while all Google Maps links are name+address based, so navigation is exact
+regardless.
 
 ## Project layout
 
 ```
-supabase/migrations/00001_init.sql   schema, RLS, storage bucket, allowlist
-supabase/functions/parse-recipe/     LLM import (Anthropic key stays server-side)
-scripts/seed.mjs                     idempotent recipes.json importer
-src/lib/scaling.ts                   serving scaler (unit-tested)
-src/lib/parseIngredient.ts           free-text ingredient parser
-src/pages/                           Home, Recipe, CookMode, Add, Edit, SignIn
+supabase/migrations/00001_travel_init.sql  schema, RLS, allowlist
+supabase/functions/parse-itinerary/        article → itinerary (Anthropic key stays server-side)
+src/lib/types.ts                           itinerary data model + day colors
+src/lib/kml.ts                             Google My Maps (KML) export (unit-tested)
+src/lib/gmaps.ts                           Google Maps deep links + day routes (unit-tested)
+src/lib/sampleParis.ts                     built-in demo itinerary
+src/components/MapView.tsx                 Leaflet map with numbered day pins
+src/pages/                                 Home (create + list), ItineraryPage, SignIn
 ```

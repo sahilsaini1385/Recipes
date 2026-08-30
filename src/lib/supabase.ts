@@ -11,11 +11,3 @@ export const supabase: SupabaseClient = createClient(
   url ?? "https://placeholder.supabase.co",
   anonKey ?? "placeholder"
 );
-
-export function photoUrl(photoPath: string | null): string | null {
-  if (!photoPath) return null;
-  const { data } = supabase.storage
-    .from("recipe-photos")
-    .getPublicUrl(photoPath);
-  return data.publicUrl;
-}

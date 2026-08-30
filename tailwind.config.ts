@@ -6,24 +6,24 @@ export default {
     extend: {
       colors: {
         paper: {
-          DEFAULT: "#faf5ec",
-          warm: "#f3e9d8",
-          deep: "#e7d8bf",
+          DEFAULT: "#f7f5ef",
+          warm: "#efece1",
+          deep: "#ddd8c7",
         },
         ink: {
-          DEFAULT: "#2b2317",
-          soft: "#6b5c45",
-          faint: "#9c8a6d",
+          DEFAULT: "#202a2e",
+          soft: "#54646b",
+          faint: "#8a99a0",
         },
-        // Texas Longhorn burnt orange
+        // Deep teal — passport-stamp green-blue
         accent: {
-          DEFAULT: "#bf5700",
-          dark: "#9a4600",
-          soft: "#fae7d4",
+          DEFAULT: "#0f766e",
+          dark: "#0b5a54",
+          soft: "#d9efec",
         },
       },
       fontFamily: {
-        serif: ["Lora", "Georgia", "serif"],
+        serif: ["Fraunces", "Georgia", "serif"],
         sans: [
           "system-ui",
           "-apple-system",
@@ -34,9 +34,9 @@ export default {
         ],
       },
       boxShadow: {
-        card: "0 1px 2px rgba(43, 35, 23, 0.04), 0 4px 16px rgba(43, 35, 23, 0.06)",
+        card: "0 1px 2px rgba(32, 42, 46, 0.05), 0 4px 16px rgba(32, 42, 46, 0.07)",
         "card-hover":
-          "0 2px 4px rgba(43, 35, 23, 0.06), 0 10px 28px rgba(191, 87, 0, 0.12)",
+          "0 2px 4px rgba(32, 42, 46, 0.06), 0 10px 28px rgba(15, 118, 110, 0.14)",
       },
     },
   },

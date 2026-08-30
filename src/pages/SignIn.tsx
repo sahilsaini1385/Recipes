@@ -1,163 +1,78 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { Loader2, MailCheck } from "lucide-react";
+import AppHeader from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/hooks/useAuth";
 
 export default function SignIn() {
-  const { session } = useAuth();
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [working, setWorking] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [linkSent, setLinkSent] = useState(false);
 
-  if (session) {
-    navigate("/");
-    return null;
-  }
-
-  const signIn = async (e: React.FormEvent) => {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setWorking(true);
+    setBusy(true);
     setError(null);
-    const cleanEmail = email.trim().toLowerCase();
-
-    // 1. Normal password sign-in.
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
-    });
-    if (!signInError) {
-      navigate("/");
-      return;
-    }
-
-    if (!/invalid login credentials/i.test(signInError.message)) {
-      setError(signInError.message);
-      setWorking(false);
-      return;
-    }
-
-    // 2. No account (or wrong password). Only family emails may register,
-    //    so check the allowlist before attempting to create an account.
-    const { data: allowed } = await supabase.rpc("email_allowed", {
-      check_email: cleanEmail,
-    });
-    if (!allowed) {
-      setError(
-        "This email is not on the family list. Ask the site owner to add it."
-      );
-      setWorking(false);
-      return;
-    }
-
-    // 3. First sign-in for a family member: create the account.
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp(
-      {
-        email: cleanEmail,
-        password,
-      }
-    );
-    if (signUpError) {
-      setError(
-        /already registered/i.test(signUpError.message)
-          ? "That password doesn't match this account. Use the family password, or send yourself a magic link below."
-          : signUpError.message
-      );
-      setWorking(false);
-      return;
-    }
-    if (signUpData.session) {
-      navigate("/");
-      return;
-    }
-    // Email confirmation is still enabled in Supabase settings.
-    setError(
-      "Account created — check your email to confirm it, then sign in again. (The site owner can turn off this confirmation step in Supabase.)"
-    );
-    setWorking(false);
-  };
-
-  const sendMagicLink = async () => {
-    if (!email.trim()) {
-      setError("Enter your email first.");
-      return;
-    }
-    setWorking(true);
-    setError(null);
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: { emailRedirectTo: window.location.origin },
     });
-    setWorking(false);
-    if (error) setError(error.message);
-    else setLinkSent(true);
-  };
+    setBusy(false);
+    if (err) setError(err.message);
+    else setSent(true);
+  }
 
   return (
-    <main className="mx-auto max-w-md px-4 pb-16 pt-8">
-      <h1 className="mb-2 text-2xl">Sign in</h1>
-      <p className="mb-6 text-ink-soft">
-        Anyone can browse. Adding or editing recipes requires a family
-        sign-in.
-      </p>
-
-      {linkSent ? (
-        <div className="rounded-xl bg-paper-warm p-4">
-          <p className="font-medium">Check your email</p>
-          <p className="mt-1 text-sm text-ink-soft">
-            We sent a sign-in link to {email}. Open it on this device.
-          </p>
-        </div>
-      ) : (
-        <form onSubmit={signIn} className="space-y-4">
-          <div>
-            <Label htmlFor="email">Email</Label>
+    <div className="min-h-screen">
+      <AppHeader />
+      <main className="mx-auto max-w-sm px-4 pt-14">
+        <h1 className="text-center font-serif text-3xl font-semibold">
+          Sign in
+        </h1>
+        <p className="mt-2 text-center text-sm text-ink-soft">
+          We&rsquo;ll email you a magic link — no password needed.
+        </p>
+        {sent ? (
+          <div className="mt-8 flex flex-col items-center gap-2 rounded-2xl border border-paper-deep bg-white p-6 text-center shadow-card">
+            <MailCheck className="text-accent" size={28} />
+            <p className="font-medium">Check your email</p>
+            <p className="text-sm text-ink-soft">
+              Open the link we sent to <strong>{email}</strong> on this device.
+            </p>
+          </div>
+        ) : (
+          <form
+            onSubmit={onSubmit}
+            className="mt-8 space-y-3 rounded-2xl border border-paper-deep bg-white p-5 shadow-card"
+          >
             <Input
-              id="email"
               type="email"
-              required
+              inputMode="email"
               autoComplete="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
               required
-              autoComplete="current-password"
-              placeholder="Family password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
             />
-          </div>
-          {error && <p className="text-sm text-red-700">{error}</p>}
-          <Button type="submit" size="lg" className="w-full" disabled={working}>
-            {working ? "Signing in…" : "Sign in"}
-          </Button>
-          <button
-            type="button"
-            onClick={sendMagicLink}
-            disabled={working}
-            className="w-full text-center text-sm text-accent underline"
-          >
-            Email me a sign-in link instead
-          </button>
-          <p className="text-xs text-ink-faint">
-            First time here? Enter your email and the family password — your
-            account is created automatically if your email is on the family
-            list.
-          </p>
-        </form>
-      )}
-    </main>
+            {error && <p className="text-sm text-red-700">{error}</p>}
+            <Button type="submit" disabled={busy} className="w-full">
+              {busy ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                "Email me a sign-in link"
+              )}
+            </Button>
+          </form>
+        )}
+        <p className="mt-6 text-center text-sm">
+          <Link to="/" className="text-ink-soft hover:text-ink">
+            ← Back home
+          </Link>
+        </p>
+      </main>
+    </div>
   );
 }

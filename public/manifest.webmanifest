@@ -1,0 +1,17 @@
+{
+  "name": "Waypoint",
+  "short_name": "Waypoint",
+  "description": "Turn travel articles into day-by-day itineraries with maps.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f5ef",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
