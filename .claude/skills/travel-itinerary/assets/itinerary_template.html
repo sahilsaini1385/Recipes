@@ -734,6 +734,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .stop h3 { margin: 0; font-size: 16px; }
   .kind { color: var(--ink-faint); font-size: 12px; margin: 2px 0 0; text-transform: capitalize; }
   .desc { color: var(--ink-soft); font-size: 15px; margin: 6px 0 0; }
+  .approx { color: var(--ink-faint); font-size: 13px; margin: 6px 0 0; }
   .tip { background: var(--tip-bg); color: var(--tip-ink); border-radius: 10px; padding: 7px 10px;
          font-size: 14px; margin: 8px 0 0; }
   .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
@@ -769,6 +770,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   const COLORS = ["#0f766e", "#b45309", "#6d28d9", "#be185d", "#1d4ed8", "#4d7c0f"];
   const color = (i) => COLORS[i % COLORS.length];
+  // day 0 marks a layer that isn't a day of the trip (e.g. "Where to stay"):
+  // label it by its title so the page never shows a meaningless "Day 0".
+  const isDay = (d) => d.day !== 0;
+  const dayChip = (d) => (isDay(d) ? `Day ${d.day}` : d.title);
+  const dayHeading = (d) => (isDay(d) ? `Day ${d.day}: ${d.title}` : d.title);
   const esc = (s) =>
     String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -855,7 +861,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         L.marker([stop.lat, stop.lng], { icon: pinIcon(color(di), String(i + 1)), title: stop.name })
           .bindPopup(
             `<div style="min-width:170px"><b>${esc(stop.name)}</b>` +
-              `<div style="font-size:12px;opacity:.7;margin:2px 0 6px">Day ${day.day} · ${esc(stop.kind)}</div>` +
+              `<div style="font-size:12px;opacity:.7;margin:2px 0 6px">${esc(dayHeading(day))} · ${esc(stop.kind)}</div>` +
               `<a href="${searchUrl(stop)}" target="_blank" rel="noreferrer" style="font-weight:600">Open in Google Maps ↗</a></div>`
           )
           .addTo(layer);
@@ -878,8 +884,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
       };
       el.appendChild(b);
     };
-    mk("All days", null, "#54646b");
-    DATA.days.forEach((d, i) => mk(`Day ${d.day}`, d.day, color(i)));
+    mk("All", null, "#54646b");
+    DATA.days.forEach((d, i) => mk(dayChip(d), d.day, color(i)));
   }
 
   function drawDays() {
@@ -888,7 +894,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
     DATA.days.forEach((day, di) => {
       if (activeDay !== null && day.day !== activeDay) return;
       const fill = color(di);
-      const routes = routeUrls(day.stops)
+      // A non-day layer (lodging, "before you go") is a set of options, not
+      // an itinerary — chaining walking directions through it is nonsense.
+      const routes = (isDay(day) ? routeUrls(day.stops) : [])
         .map(
           (u, i, arr) =>
             `<a class="route" target="_blank" rel="noreferrer" href="${u}">` +
@@ -907,6 +915,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
               s.area || s.address ? " · " + esc(s.area || s.address) : ""
             }</p>
             ${s.description ? `<p class="desc">${esc(s.description)}</p>` : ""}
+            ${s.approx ? `<p class="approx">◎ Approximate pin — the article gave no address. Tap Google Maps for the exact place.</p>` : ""}
             ${s.tip ? `<p class="tip">💡 ${esc(s.tip)}</p>` : ""}
             <div class="actions">
               <a target="_blank" rel="noreferrer" href="${searchUrl(s)}">📍 Google Maps</a>
@@ -918,7 +927,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
         .join("");
       el.insertAdjacentHTML(
         "beforeend",
-        `<section><h2><span class="dot" style="background:${fill}"></span>Day ${day.day}: ${esc(day.title)}${routes}</h2>
+        `<section><h2><span class="dot" style="background:${fill}"></span>${esc(dayHeading(day))}${routes}</h2>
          <ol class="stops">${stops}</ol></section>`
       );
     });

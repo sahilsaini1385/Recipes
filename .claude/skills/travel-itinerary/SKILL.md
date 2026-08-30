@@ -72,6 +72,12 @@ in rough priority order:
   day morning → evening and to minimize backtracking on foot. A listicle
   ("10 best coffee bars in…") still becomes a walkable order. If the user
   asked for a specific number of days, honor it.
+- **Lodging and other non-day stops.** Articles often carry a "Where to
+  stay" section that belongs to no particular day. Give it its own entry with
+  `"day": 0` and a title like "Where to stay": the KML labels that layer by
+  title, and the page skips the walking-route link (a route between six
+  hotels you must choose between is nonsense). Everything else keeps
+  `day` 1..n.
 - **Coordinates.** Use your knowledge of the actual venue: be precise for
   well-known places; if you only know the neighborhood, use its center and
   set `"approx": true`. Never use 0,0 and never place a stop in the wrong
@@ -119,6 +125,7 @@ in rough priority order:
 }
 ```
 
+`day`: 1..n for days of the trip; `0` for a non-day layer such as lodging.
 `kind`: one of sight, museum, restaurant, cafe, bakery, bar, hotel, shop,
 activity, neighborhood, viewpoint, other. `time_of_day`: morning, afternoon,
 evening, flexible. `area`/`address` may be `""` when unknown — never invent
@@ -178,9 +185,12 @@ publishing isn't available, put the day-by-day itinerary in chat instead
 
 ## Step 5 — Close the loop
 
-- Summarize the itinerary in chat (days, stop counts, anything you flagged
-  `approx`), and remind the user pins flagged approximate are
-  neighborhood-level while the Google Maps links stay exact.
+- Summarize the itinerary in chat: days, stop counts, and — naming them —
+  any stops you flagged `approx` (`build_kml.py` prints the count as a
+  reminder). Say plainly that those pins sit at neighborhood level because
+  the article gave no address, while every Google Maps link still resolves
+  to the exact venue. A user who knows which pins are soft can trust the
+  rest; one who discovers it in the street cannot.
 - Offer refinements — they're cheap now that the JSON exists: drop/add
   stops, rebalance days, merge another article. After any change, rerun
   Step 3 (and republish the artifact) so every deliverable stays in sync.

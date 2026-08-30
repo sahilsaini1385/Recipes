@@ -130,7 +130,11 @@ def build(it: dict) -> str:
                 f"        <Point><coordinates>{stop['lng']},{stop['lat']},0</coordinates></Point>\n"
                 "      </Placemark>"
             )
-        folder_name = escape(f"Day {day.get('day', i + 1)}: {day.get('title', '')}".rstrip(": "))
+        # day 0 marks a layer that isn't a day of the trip (lodging, "before
+        # you go"): label it by title alone rather than printing "Day 0".
+        number = day.get("day", i + 1)
+        raw_name = day.get("title", "") if number == 0 else f"Day {number}: {day.get('title', '')}"
+        folder_name = escape(raw_name.strip().rstrip(":").strip() or f"Layer {i + 1}")
         folders.append(
             "    <Folder>\n"
             f"      <name>{folder_name}</name>\n" + "\n".join(placemarks) + "\n    </Folder>"
@@ -164,10 +168,14 @@ def main() -> int:
             print(f"  - {err}", file=sys.stderr)
         return 1
     kml = build(itinerary)
-    with open(sys.argv[2], "w", encoding="utf-8") as fh:
+    with open(args[1], "w", encoding="utf-8") as fh:
         fh.write(kml)
     stops = sum(len(d["stops"]) for d in itinerary["days"])
-    print(f"Wrote {sys.argv[2]}: {len(itinerary['days'])} day layers, {stops} pins.")
+    approx = sum(s.get("approx") is True for d in itinerary["days"] for s in d["stops"])
+    print(f"Wrote {args[1]}: {len(itinerary['days'])} layers, {stops} pins.")
+    if approx:
+        print(f"  {approx} pin(s) flagged approximate — tell the user which, "
+              "and that their Google Maps links still go to the exact venue.")
     return 0
 
 
