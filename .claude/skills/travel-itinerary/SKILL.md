@@ -1,6 +1,6 @@
 ---
 name: travel-itinerary
-description: Turn a travel article into a day-by-day itinerary with maps the user can take on their phone — a KML file that imports into Google My Maps as per-day layers of pins, plus a mobile-friendly itinerary page. Use this whenever the user shares a link or text of a travel article, city guide, "best of" listicle, or trip write-up and wants an itinerary, trip plan, map, pins, KML, or a Google My Maps / Google Maps version of it — even if they just say "put this on a map", "plan this trip", or "add this to my maps". Also use it to merge several articles about one destination into a single trip map.
+description: Turn a travel article into a day-by-day itinerary with maps the user can take on their phone — a KML file that imports into Google My Maps as per-day layers of pins, plus a mobile-friendly itinerary page. Use this whenever the user shares a link or text of a travel article, city guide, "best of" listicle, or trip write-up and wants an itinerary, trip plan, map, pins, KML, or a Google My Maps / Google Maps version of it — even if they just say "put this on a map", "plan this trip", or "add this to my maps". Also use it when the user gives several articles or links at once — merge sources covering one trip into a single map, or build one map per destination.
 ---
 
 # Travel Itinerary
@@ -19,12 +19,15 @@ The import takes the user ~30 seconds and the instructions below cover it.
 
 ## Step 1 — Get the article text
 
-- If the user pasted text or gave a file, use it directly. Several articles
-  for one destination are fine — they merge into one itinerary (see Step 2).
-- For a URL, run the bundled fetcher (stdlib-only Python):
+- If the user pasted text or gave a file, use it directly. Multiple articles
+  are welcome — any mix of URLs, pasted text, and files — and merge into one
+  itinerary when they cover one trip (see Step 2).
+- For URLs, run the bundled fetcher (stdlib-only Python) once per link,
+  giving each article its own output file so nothing is overwritten:
 
   ```bash
-  python3 scripts/fetch_article.py "<url>" -o article.txt
+  python3 scripts/fetch_article.py "<url-1>" -o article-1.txt
+  python3 scripts/fetch_article.py "<url-2>" -o article-2.txt
   ```
 
   It fetches with browser headers, prefers the full `articleBody` publishers
@@ -63,6 +66,10 @@ in rough priority order:
   to book), or null. `tips` (top level) is article-wide advice.
 - **Merging articles.** When combining several sources, dedupe stops by
   venue, keep the richest description, and note disagreements in the tip.
+  Merge into one itinerary only when the articles cover one trip. If they
+  cover different destinations (a Paris article and a London article), build
+  a separate itinerary + KML per destination — separate My Maps stay usable —
+  unless the user explicitly wants them as one multi-city trip.
 
 ### Itinerary JSON schema
 
@@ -108,7 +115,11 @@ python3 scripts/build_kml.py itinerary.json <slug>.kml
 The script validates the JSON (coordinate sanity included) and emits KML with
 one folder per day, day-colored numbered pins, and each stop's notes + a
 Google Maps link in the pin description. Fix any validation error it reports
-(usually a coordinate typo) rather than bypassing it.
+(usually a coordinate typo) rather than bypassing it. One deliberate
+exception: it rejects itineraries spanning more than ~200km to catch
+wrong-city pins — when the trip really is that wide (a road trip, a
+multi-town region, an intentional multi-city itinerary), add `--allow-wide`
+after double-checking each outlying stop's coordinates.
 
 Send the `.kml` to the user with the file-delivery tool available in your
 environment (e.g. `SendUserFile` as an attachment). Never deliver it only as

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Build a Google My Maps-ready KML file from an itinerary JSON.
 
-Usage: build_kml.py itinerary.json output.kml
+Usage: build_kml.py itinerary.json output.kml [--allow-wide]
+
+--allow-wide skips the ~200km-spread check for trips that genuinely cover a
+region (road trips, multi-town or multi-city itineraries). Leave it off
+otherwise — the check exists to catch wrong-city coordinates.
 
 Validates the itinerary first and refuses to emit obviously broken data
 (missing days, out-of-range or 0,0 coordinates, stops scattered across the
@@ -42,7 +46,7 @@ def gmaps_url(stop: dict, destination: str) -> str:
     return "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(query)
 
 
-def validate(it: dict) -> list:
+def validate(it: dict, allow_wide: bool = False) -> list:
     errors = []
     for key in ("title", "destination", "days"):
         if not it.get(key):
@@ -68,8 +72,9 @@ def validate(it: dict) -> list:
                 errors.append(f"{label} '{name}': unknown kind {stop.get('kind')!r}")
             if stop.get("time_of_day") not in TIMES:
                 errors.append(f"{label} '{name}': unknown time_of_day {stop.get('time_of_day')!r}")
-    # All stops should be one destination; a >2° spread means a wrong-city pin.
-    if len(coords) >= 2:
+    # All stops should be one destination; a >2° spread means a wrong-city pin
+    # (unless the caller declared a wide trip with --allow-wide).
+    if not allow_wide and len(coords) >= 2:
         lats = [c[0] for c in coords]
         lngs = [c[1] for c in coords]
         if max(lats) - min(lats) > 2 or max(lngs) - min(lngs) > 2:
@@ -80,7 +85,8 @@ def validate(it: dict) -> list:
             )
             errors.append(
                 f"stops span more than ~200km — check '{outlier[2]}' at "
-                f"{outlier[0]},{outlier[1]} (wrong city?)"
+                f"{outlier[0]},{outlier[1]} (wrong city? for a genuine road "
+                "trip or multi-city itinerary, rerun with --allow-wide)"
             )
     return errors
 
@@ -144,12 +150,14 @@ def build(it: dict) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
+    args = [a for a in sys.argv[1:] if a != "--allow-wide"]
+    allow_wide = "--allow-wide" in sys.argv[1:]
+    if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 1
-    with open(sys.argv[1], encoding="utf-8") as fh:
+    with open(args[0], encoding="utf-8") as fh:
         itinerary = json.load(fh)
-    errors = validate(itinerary)
+    errors = validate(itinerary, allow_wide=allow_wide)
     if errors:
         print("VALIDATION FAILED:", file=sys.stderr)
         for err in errors:
