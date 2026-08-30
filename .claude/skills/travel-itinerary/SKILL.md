@@ -30,14 +30,32 @@ The import takes the user ~30 seconds and the instructions below cover it.
   python3 scripts/fetch_article.py "<url-2>" -o article-2.txt
   ```
 
-  It fetches with browser headers, prefers the full `articleBody` publishers
-  embed in JSON-LD (this often works even for paywalled pages), and falls
-  back to stripped page text. WebFetch is a fine alternative when it works,
-  but many travel publishers block it; the script gets through more often.
-- If the fetch fails or returns too little text (< ~500 chars of real
-  article), don't guess at the article's content from the URL or from memory
-  of the publication. Tell the user the site blocked the fetch and ask them
-  to open the article in their browser, select all, and paste the text.
+  Many modern publishers (Condé Nast titles, and anything on Next.js/Nuxt)
+  render the article client-side: the readable HTML is mostly navigation and
+  the real text sits in a JSON state blob in a `<script>` tag. The script
+  handles this — it tries JSON-LD `articleBody`, embedded JSON state
+  (`__PRELOADED_STATE__`, `__NEXT_DATA__`, `__NUXT__`), `<article>`/`<main>`,
+  and whole-page text, then keeps whichever yields the most real prose. If
+  the live page is blocked or thin it also tries the page's Wayback Machine
+  snapshot. Prefer this script over WebFetch, which many travel publishers
+  block outright.
+
+- **Read the script's exit code — it is the difference between a good
+  itinerary and a fabricated one.**
+  - `0` — usable text was saved. The report line names the strategy that won.
+  - `2` (fetch failed) or `3` (page fetched, but no real article text —
+    paywalled or fully client-rendered): **stop and ask the user to paste the
+    article text.** Do not fill the gap from the URL slug, the publication's
+    reputation, or your own knowledge of the destination — an itinerary of
+    plausible-sounding places the article never recommended is the one
+    outcome worse than no itinerary.
+- Extracted text from a JSON-state page can carry teasers for *other*
+  articles ("Where to Stay Near Banff…") alongside the real one. Use only
+  the stops belonging to the article you asked for — the headline and day
+  headings tell you which those are.
+- If the user is watching and a site keeps failing, the fastest fix is
+  usually theirs: open the article, select all, paste. Say that plainly
+  rather than retrying a blocked host repeatedly.
 
 ## Step 2 — Extract the itinerary
 

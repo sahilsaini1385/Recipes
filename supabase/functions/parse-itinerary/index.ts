@@ -144,7 +144,10 @@ function jsonLdArticleBody(html: string): string {
           return;
         }
         const obj = node as Record<string, unknown>;
-        if (typeof obj.articleBody === "string" && obj.articleBody.length > best.length) {
+        if (
+          typeof obj.articleBody === "string" &&
+          obj.articleBody.length > best.length
+        ) {
           best = obj.articleBody;
         }
         Object.values(obj).forEach(walk);
@@ -157,13 +160,175 @@ function jsonLdArticleBody(html: string): string {
   return best;
 }
 
+// Keys whose values are article content even when short (venue names, day
+// headings). Recall matters here — a dropped name is a dropped pin.
+const CONTENT_KEYS = new Set([
+  "hed",
+  "dek",
+  "dangerousdek",
+  "dangeroushed",
+  "name",
+  "title",
+  "heading",
+  "subhed",
+  "description",
+  "shortdescription",
+  "longdescription",
+  "caption",
+  "text",
+  "body",
+  "content",
+  "articlebody",
+  "excerpt",
+  "summary",
+]);
+// Subtrees that are never the article: site chrome, styling, recirculation.
+const SKIP_KEYS = new Set([
+  "recirc",
+  "recircs",
+  "related",
+  "relatedvideo",
+  "relatedaudio",
+  "recommendations",
+  "newsletter",
+  "footer",
+  "nav",
+  "navigation",
+  "header",
+  "headerprops",
+  "promo",
+  "ads",
+  "advertisement",
+  "seo",
+  "meta",
+  "design",
+  "stylesheet",
+  "styles",
+  "theme",
+  "sctheme",
+  "assets",
+  "fonts",
+  "typography",
+  "config",
+  "featureflags",
+  "env",
+  "locale",
+  "tracking",
+  "analytics",
+  "socialmedia",
+  "breadcrumb",
+  "componentconfig",
+  "renditions",
+]);
+const CSS_HINTS = [
+  "minmax(",
+  "1fr",
+  "max-content",
+  "repeat(",
+  "@font-face",
+  "grid-template",
+  "var(--",
+];
+
+function isJunk(s: string): boolean {
+  if (CSS_HINTS.some((h) => s.includes(h))) return true;
+  if ((s.match(/"/g) ?? []).length >= 2) return true; // css grid-area lists
+  if (s.startsWith("Image may contain")) return true;
+  if (
+    /^\s*[<{@]|^https?:\/\/|^data:|^[\w./-]+\.(js|css|png|jpe?g|svg|woff2?)\b/.test(
+      s,
+    )
+  ) {
+    return true;
+  }
+  if ((s.match(/[{;]/g) ?? []).length > 2) return true;
+  if (s.length < 20 && /^[a-z][a-z0-9-]*$/.test(s)) return true;
+  const letters = (s.match(/\p{L}/gu) ?? []).length;
+  return letters / Math.max(s.length, 1) < 0.5;
+}
+
+/**
+ * Publishers on Next.js/Nuxt (Condé Nast among them) render the article
+ * client-side: the served HTML is mostly navigation and the real text lives
+ * in a JSON state blob. Harvest content-bearing strings out of that tree.
+ */
+function harvestJson(
+  node: unknown,
+  key = "",
+  out: string[] = [],
+  seen = new Set<string>(),
+): string[] {
+  if (Array.isArray(node)) {
+    for (const v of node) harvestJson(v, key, out, seen);
+  } else if (node && typeof node === "object") {
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      if (!SKIP_KEYS.has(k.toLowerCase())) harvestJson(v, k, out, seen);
+    }
+  } else if (typeof node === "string") {
+    const txt = decodeEntities(node.replace(/<[^>]+>/g, " "))
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!txt || isJunk(txt)) return out;
+    const keyed =
+      CONTENT_KEYS.has(key.toLowerCase()) &&
+      txt.length >= 2 &&
+      txt.length <= 6000;
+    const prose = txt.length >= 25 && (txt.match(/ /g) ?? []).length >= 3;
+    if (keyed || prose) {
+      const norm = txt.toLowerCase();
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        out.push(txt);
+      }
+    }
+  }
+  return out;
+}
+
+function jsonStateText(html: string): string {
+  const patterns = [
+    /window\.__PRELOADED_STATE__\s*=\s*(\{[\s\S]*?\})\s*;?\s*<\/script>/i,
+    /<script[^>]*id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i,
+    /window\.__NUXT__\s*=\s*(\{[\s\S]*?\})\s*;?\s*<\/script>/i,
+  ];
+  const parts: string[] = [];
+  for (const pattern of patterns) {
+    const m = html.match(pattern);
+    if (!m) continue;
+    try {
+      parts.push(...harvestJson(JSON.parse(m[1])));
+    } catch {
+      // not valid JSON on its own — skip this blob
+    }
+  }
+  return parts.join("\n");
+}
+
+/** Chars living in sentence-like lines; navigation and menus score ~0. */
+function proseScore(text: string): number {
+  let total = 0;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if ((line.match(/ /g) ?? []).length >= 7 && /[.!?]["')\]]?$/.test(line)) {
+      total += line.length;
+    }
+  }
+  return total;
+}
+
 function stripHtml(html: string): string {
   return decodeEntities(
     html
-      .replace(/<(script|style|noscript|template|svg|iframe|head)[\s\S]*?<\/\1>/gi, " ")
+      .replace(
+        /<(script|style|noscript|template|svg|iframe|head)[\s\S]*?<\/\1>/gi,
+        " ",
+      )
       .replace(/<!--[\s\S]*?-->/g, " ")
-      .replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/section|\/article)[^>]*>/gi, "\n")
-      .replace(/<[^>]+>/g, " ")
+      .replace(
+        /<(br|\/p|\/div|\/li|\/h[1-6]|\/section|\/article)[^>]*>/gi,
+        "\n",
+      )
+      .replace(/<[^>]+>/g, " "),
   )
     .replace(/[ \t]+/g, " ")
     .replace(/\s*\n\s*/g, "\n")
@@ -212,22 +377,35 @@ async function fetchArticle(rawUrl: string): Promise<string> {
   const html = await res.text();
 
   const titleMatch =
-    html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)/i) ??
-    html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    html.match(
+      /<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)/i,
+    ) ?? html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const title = titleMatch ? decodeEntities(titleMatch[1]).trim() : "";
 
-  // Publishers often embed the full article body in JSON-LD even when the
-  // rendered page is paywalled or JS-heavy — prefer it when substantial.
-  const ldBody = jsonLdArticleBody(html);
-  const body = ldBody.length > 800 ? ldBody : stripHtml(html);
+  // Try every extraction strategy and keep whichever yields the most real
+  // prose. Length alone is a trap: a page of navigation is long and useless.
+  const candidates = [
+    jsonLdArticleBody(html),
+    jsonStateText(html),
+    stripHtml(html),
+  ];
+  let body = "";
+  let best = -1;
+  for (const candidate of candidates) {
+    const score = proseScore(candidate);
+    if (score > best) {
+      best = score;
+      body = candidate;
+    }
+  }
 
-  const text = `${title}\n\n${body}`.slice(0, MAX_ARTICLE_CHARS);
-  if (body.length < 500) {
+  if (best < 800) {
     throw new FetchFailed(
-      "We couldn't read enough text from that page (it may be paywalled or rendered with JavaScript)."
+      "We couldn't read the article from that page (it may be paywalled or " +
+        "rendered with JavaScript). Paste the article text instead.",
     );
   }
-  return text;
+  return `${title}\n\n${body}`.slice(0, MAX_ARTICLE_CHARS);
 }
 
 Deno.serve(async (req) => {
@@ -242,7 +420,7 @@ Deno.serve(async (req) => {
       global: {
         headers: { Authorization: req.headers.get("Authorization") ?? "" },
       },
-    }
+    },
   );
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) {
@@ -318,7 +496,7 @@ Deno.serve(async (req) => {
           error:
             "That didn't look like a travel article with visitable places — try a destination guide.",
         },
-        422
+        422,
       );
     }
     return json(itinerary);
