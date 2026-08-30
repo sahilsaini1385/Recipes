@@ -1,0 +1,63 @@
+{
+  "skill_name": "travel-itinerary",
+  "evals": [
+    {
+      "id": 0,
+      "name": "lisbon-two-days",
+      "prompt": "My sister sent me a travel article about Lisbon \u2014 I saved the text at /home/user/Recipes/.claude/skills/travel-itinerary-workspace/files/lisbon-article.txt. We're going in October. Can you turn it into a day-by-day itinerary and make me one of those files I can import into Google My Maps so it shows up on my phone? A phone-friendly page of the plan would be great too.",
+      "expected_output": "A valid KML file with 2 day folders matching the article's Day One/Day Two structure, ~13 stops all named in the article with coordinates inside Lisbon, tips carried into pin descriptions; an itinerary JSON; a phone-friendly HTML page; My Maps import instructions.",
+      "files": [
+        "files/lisbon-article.txt"
+      ],
+      "assertions": [
+        "KML file exists and parses as valid XML in the KML 2.2 namespace",
+        "All pins fall inside Lisbon's bounding box",
+        "Every pin names a place from the source article (nothing invented)",
+        "Pin descriptions carry a Google Maps link",
+        "KML has exactly 2 day folders (layers)",
+        "At least 10 pins (article coverage)",
+        "A phone-friendly HTML itinerary page with an interactive map exists",
+        "Reply gives Google My Maps import instructions (mymaps.google.com + Import)"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "rome-espresso-walk",
+      "prompt": "ok i pasted this listicle about coffee bars in rome into /home/user/Recipes/.claude/skills/travel-itinerary-workspace/files/rome-coffee.txt. its not day-by-day, just a list of 8 places. can u still make me a walking map out of it? i want the google my maps import file + google maps links for each spot",
+      "expected_output": "A valid KML with the 8 coffee bars (no invented stops), grouped into 1-3 geographically sensible days/layers with a walkable order, coordinates inside Rome, the listicle's tips in descriptions, Google Maps links per stop.",
+      "files": [
+        "files/rome-coffee.txt"
+      ],
+      "assertions": [
+        "KML file exists and parses as valid XML in the KML 2.2 namespace",
+        "All pins fall inside Rome's bounding box",
+        "Every pin names a place from the source article (nothing invented)",
+        "Pin descriptions carry a Google Maps link",
+        "Exactly 8 pins \u2014 nothing dropped, nothing padded",
+        "Stop order walks shorter than the article's listing order",
+        "A phone-friendly HTML itinerary page with an interactive map exists",
+        "Reply gives Google My Maps import instructions (mymaps.google.com + Import)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "tokyo-merge-3days",
+      "prompt": "I've got two short Tokyo articles saved at /home/user/Recipes/.claude/skills/travel-itinerary-workspace/files/tokyo-article-1.txt and /home/user/Recipes/.claude/skills/travel-itinerary-workspace/files/tokyo-article-2.txt. Merge them into one 3-day itinerary (we land Friday morning) and give me the My Maps file and a phone version.",
+      "expected_output": "A valid KML with exactly 3 day folders merging both articles, Shibuya Sky (mentioned in both) pinned only once, coordinates inside Tokyo, sensible geographic day grouping; itinerary JSON and HTML page.",
+      "files": [
+        "files/tokyo-article-1.txt",
+        "files/tokyo-article-2.txt"
+      ],
+      "assertions": [
+        "KML file exists and parses as valid XML in the KML 2.2 namespace",
+        "All pins fall inside Tokyo's bounding box",
+        "Every pin names a place from the source article (nothing invented)",
+        "Pin descriptions carry a Google Maps link",
+        "KML has exactly 3 day folders (layers)",
+        "'Shibuya Sky' (in both source articles) is pinned exactly once",
+        "A phone-friendly HTML itinerary page with an interactive map exists",
+        "Reply gives Google My Maps import instructions (mymaps.google.com + Import)"
+      ]
+    }
+  ]
+}
