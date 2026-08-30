@@ -10,3 +10,5 @@ dist
 supabase/.temp
 *.tsbuildinfo
 .claude/skills/travel-itinerary-workspace/
+__pycache__/
+*.pyc
