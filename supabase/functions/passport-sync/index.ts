@@ -104,14 +104,19 @@ const COUNTRY_NAMES: Record<string, string> = {
   TO: "Tonga", TT: "Trinidad and Tobago", TN: "Tunisia", TR: "Turkey",
   TM: "Turkmenistan", TV: "Tuvalu", UG: "Uganda", UA: "Ukraine",
   AE: "United Arab Emirates", GB: "United Kingdom", US: "United States",
+  // The family counts the UK's constituent countries separately, the way
+  // the Google Sheet lists them.
+  "GB-ENG": "England", "GB-SCT": "Scotland", "GB-WLS": "Wales",
+  "GB-NIR": "Northern Ireland",
   UY: "Uruguay", UZ: "Uzbekistan", VU: "Vanuatu", VE: "Venezuela",
   VN: "Vietnam", YE: "Yemen", ZM: "Zambia", ZW: "Zimbabwe",
 };
 
 const COUNTRY_ALIASES: Record<string, string> = {
   "usa": "US", "us": "US", "america": "US", "united states of america": "US",
-  "england": "GB", "scotland": "GB", "wales": "GB", "northern ireland": "GB",
-  "great britain": "GB", "uk": "GB", "britain": "GB",
+  "england": "GB-ENG", "scotland": "GB-SCT", "wales": "GB-WLS",
+  "northern ireland": "GB-NIR", "n ireland": "GB-NIR", "ulster": "GB-NIR",
+  "great britain": "GB", "uk": "GB", "britain": "GB", "united kingdom": "GB",
   "west germany": "DE", "east germany": "DE",
   "czechoslovakia": "CZ", "czechslovakia": "CZ", "czech republic": "CZ",
   "czech rep": "CZ",
@@ -246,6 +251,9 @@ function sheetToGrid(ws: XLSX.WorkSheet): Grid {
   return rows.map((r) => r.map((c) => String(c ?? "").trim()));
 }
 
+/** How many blank rows end a person's list (scratch work sits below). */
+const MAX_BLANK_RUN = 3;
+
 /** Country List: header row of names, then one country per cell below. */
 function parseCountryTab(grid: Grid): {
   people: Array<{ name: string; codes: string[] }>;
@@ -272,9 +280,19 @@ function parseCountryTab(grid: Grid): {
       .trim();
     if (!name) continue;
     const codes = new Set<string>();
+    // Each person's list is one unbroken block under the header. The family
+    // also keeps scratch work (tally columns, comparison lists) far below
+    // it, so a run of blank rows ends the list.
+    let blankRun = 0;
     for (let row = headerRow + 1; row < grid.length; row++) {
       const entry = (grid[row] ?? [])[col];
-      if (!entry) continue;
+      if (!entry) {
+        if (++blankRun >= MAX_BLANK_RUN) break;
+        continue;
+      }
+      blankRun = 0;
+      // Tally marks and stray figures aren't places.
+      if (/^[\d.,]+$/.test(entry)) continue;
       if (isFutureDated(entry)) {
         excluded.push(`${name}: ${entry}`);
         continue;

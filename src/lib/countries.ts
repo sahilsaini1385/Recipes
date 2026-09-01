@@ -3,18 +3,32 @@ export interface Country {
   name: string;
 }
 
-/** Turn a 2-letter country code into its flag emoji (regional indicators). */
+// The UK's constituent countries are counted separately (as the family's
+// travel sheet lists them). England, Scotland and Wales have real emoji
+// flags via tag sequences; Northern Ireland has none, so it flies the
+// Union Jack.
+const SUBDIVISION_FLAGS: Record<string, string> = {
+  "GB-ENG": "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}",
+  "GB-SCT": "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
+  "GB-WLS": "\u{1F3F4}\u{E0067}\u{E0062}\u{E0077}\u{E006C}\u{E0073}\u{E007F}",
+  "GB-NIR": "🇬🇧",
+};
+
+/** Turn a country code into its flag emoji (regional indicators). */
 export function flagEmoji(code: string): string {
+  const upper = code.toUpperCase();
+  if (SUBDIVISION_FLAGS[upper]) return SUBDIVISION_FLAGS[upper];
   if (!/^[A-Za-z]{2}$/.test(code)) return "🏳️";
   // Kosovo has no emoji flag; regional indicators would render as raw "XK".
-  if (code.toUpperCase() === "XK") return "🏳️";
-  return code
-    .toUpperCase()
-    .replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
+  if (upper === "XK") return "🏳️";
+  return upper.replace(/./g, (c) =>
+    String.fromCodePoint(127397 + c.charCodeAt(0))
+  );
 }
 
 // UN member states + a few commonly "counted" places (Taiwan, Hong Kong,
-// Kosovo, Vatican, Puerto Rico, Bermuda, Curaçao). Alphabetical by name.
+// Kosovo, Vatican, Puerto Rico, Bermuda, Curaçao) + the UK's constituent
+// countries, which the family counts separately. Alphabetical by name.
 export const COUNTRIES: Country[] = [
   { code: "AF", name: "Afghanistan" },
   { code: "AL", name: "Albania" },
@@ -71,6 +85,7 @@ export const COUNTRIES: Country[] = [
   { code: "EC", name: "Ecuador" },
   { code: "EG", name: "Egypt" },
   { code: "SV", name: "El Salvador" },
+  { code: "GB-ENG", name: "England" },
   { code: "GQ", name: "Equatorial Guinea" },
   { code: "ER", name: "Eritrea" },
   { code: "EE", name: "Estonia" },
@@ -150,6 +165,7 @@ export const COUNTRIES: Country[] = [
   { code: "NG", name: "Nigeria" },
   { code: "KP", name: "North Korea" },
   { code: "MK", name: "North Macedonia" },
+  { code: "GB-NIR", name: "Northern Ireland" },
   { code: "NO", name: "Norway" },
   { code: "OM", name: "Oman" },
   { code: "PK", name: "Pakistan" },
@@ -174,6 +190,7 @@ export const COUNTRIES: Country[] = [
   { code: "SM", name: "San Marino" },
   { code: "ST", name: "São Tomé and Príncipe" },
   { code: "SA", name: "Saudi Arabia" },
+  { code: "GB-SCT", name: "Scotland" },
   { code: "SN", name: "Senegal" },
   { code: "RS", name: "Serbia" },
   { code: "SC", name: "Seychelles" },
@@ -215,6 +232,7 @@ export const COUNTRIES: Country[] = [
   { code: "VU", name: "Vanuatu" },
   { code: "VE", name: "Venezuela" },
   { code: "VN", name: "Vietnam" },
+  { code: "GB-WLS", name: "Wales" },
   { code: "YE", name: "Yemen" },
   { code: "ZM", name: "Zambia" },
   { code: "ZW", name: "Zimbabwe" },
