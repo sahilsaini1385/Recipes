@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 const SECTION_LABELS: Record<string, string> = {
   "/": "Recipes",
+  "/trips": "Trips",
   "/passport": "Passport",
   "/tree": "Family Tree",
 };

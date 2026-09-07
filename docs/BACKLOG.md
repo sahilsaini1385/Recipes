@@ -57,11 +57,6 @@ restaurants and itineraries below have somewhere to live.
 > may reference the same country codes, but `passport-sync` must keep working
 > untouched. Do not make passport counts derive from trips.
 
-- **1.1 — Trip records** *(M)*
-  `trips` table: title, start/end date, blurb, travellers (member ids),
-  country and state codes touched. A Trips tab listing them newest first,
-  and a trip detail page. Seed from the existing passport data where a year
-  is known.
 - **1.2 — Places and restaurants** *(M)* — *asked for explicitly*
   `trip_places`: name, city, country, kind (restaurant / hotel / sight /
   bar / shop), a note, a would-return flag, optional link. Addable from a
@@ -173,7 +168,6 @@ They are not a separate project.
 
 - Three orphan edge functions in Supabase — `super-processor`,
   `hyper-responder`, `dynamic-task`. Nothing calls them; they squat names.
-- `set_updated_at` has a mutable `search_path` (advisor warning).
 - Leaked-password protection is off (dashboard toggle, owner's action).
 - `scripts/seed.mjs`, `netlify.toml`, and the `playwright` dev dependency
   may all be removable — awaiting a decision.
@@ -199,3 +193,25 @@ They are not a separate project.
 
 Shipped items move here with the date and a one-line note, so the report
 each morning has something to point at.
+
+### 2026-09-07
+
+- **1.1 Trip records — shipped.** `trips`, `trip_travellers` and
+  `trip_destinations`, a Trips tab listing newest first, and a trip detail
+  page. Family members can add, edit and remove; removal is soft, and a
+  removed trip stays readable to family so it can be brought back while
+  staying hidden from the public link. Dates are both optional, because a
+  trip nobody can date is still worth recording.
+- **`set_updated_at` search_path pinned.** Cleared the advisor warning, and
+  the function now fires on every trips update so it was worth closing.
+
+**Corrected while building:** 1.1 used to say "seed from the existing
+passport data where a year is known". There are no years to seed from —
+`country_visits` holds only a member and a code, and the sheet parser strips
+date phrases before mapping a name to a code. Trips start empty.
+
+**Learned, for whoever builds next:** the headless browser in this
+environment has no direct internet, so a page built against the live
+Supabase URL sits on "Loading…" forever. Point the build at the local mock
+on :54321 for UI checks (`scratchpad/mock.mjs`, which now serves trips) and
+verify the database side separately over REST, where the proxy works.

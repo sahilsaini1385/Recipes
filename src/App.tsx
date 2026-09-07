@@ -10,6 +10,8 @@ import EditRecipe from "@/pages/EditRecipe";
 import SignIn from "@/pages/SignIn";
 import Passport from "@/pages/Passport";
 import FamilyTree from "@/pages/FamilyTree";
+import Trips from "@/pages/Trips";
+import TripPage from "@/pages/TripPage";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +53,9 @@ export default function App() {
       ? "Passport"
       : pathname.startsWith("/tree")
         ? "Family Tree"
-        : "Recipes";
+        : pathname.startsWith("/trips")
+          ? "Trips"
+          : "Recipes";
     document.title = `Jungman Family · ${section}`;
   }, [pathname]);
 
@@ -66,6 +70,8 @@ export default function App() {
         <Route path="/recipe/:slug" element={<RecipePage />} />
         <Route path="/add" element={<AddRecipe />} />
         <Route path="/edit/:slug" element={<EditRecipe />} />
+        <Route path="/trips" element={<Trips />} />
+        <Route path="/trips/:id" element={<TripPage />} />
         <Route path="/passport" element={<Passport />} />
         <Route path="/tree" element={<FamilyTree />} />
         <Route path="/signin" element={<SignIn />} />

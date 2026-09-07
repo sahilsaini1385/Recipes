@@ -1,15 +1,17 @@
 import { Link, useLocation } from "react-router-dom";
-import { ChefHat, Plane, TreeDeciduous } from "lucide-react";
+import { ChefHat, Plane, TreeDeciduous, Luggage } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { to: "/", label: "Recipes", icon: ChefHat },
+  { to: "/trips", label: "Trips", icon: Luggage },
   { to: "/passport", label: "Passport", icon: Plane },
   { to: "/tree", label: "Tree", icon: TreeDeciduous },
 ] as const;
 
 /** Which section a path belongs to (recipes is the catch-all). */
 export function sectionFor(pathname: string): string {
+  if (pathname.startsWith("/trips")) return "/trips";
   if (pathname.startsWith("/passport")) return "/passport";
   if (pathname.startsWith("/tree")) return "/tree";
   return "/";
