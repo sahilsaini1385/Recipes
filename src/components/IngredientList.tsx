@@ -1,4 +1,5 @@
 import { scaleIngredient } from "@/lib/scaling";
+import { pluralizeItem } from "@/lib/plural";
 import { formatMetric, isConvertibleUnit, type UnitSystem } from "@/lib/units";
 import type { Ingredient } from "@/lib/types";
 
@@ -85,9 +86,15 @@ export function IngredientLine({
     if (metric) amountText = metric;
   }
 
+  // With no unit, the ingredient's own name is what's being counted, so it
+  // carries the plural: "3 lemons", not "3 lemon".
+  const itemText = ingredient.unit
+    ? ingredient.item
+    : pluralizeItem(ingredient.item, scaledAmount);
+
   return (
     <span>
-      <span className="font-semibold">{amountText}</span> {ingredient.item}
+      <span className="font-semibold">{amountText}</span> {itemText}
       {line.approx && (
         <span className="font-serif text-xs italic text-ink-faint"> approx</span>
       )}
