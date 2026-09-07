@@ -1,0 +1,78 @@
+-- UNDO for 00013_finance_lodger_schema.sql -- moving Budgie back out.
+--
+-- Run the numbered steps in order. Steps 1-3 are outside this file because
+-- they involve the finance app and the Supabase dashboard; the SQL at the
+-- bottom is the last step, and it is the only irreversible one.
+--
+-- ---------------------------------------------------------------------
+-- 1. Bring the finance project back.
+--
+--    Supabase dashboard -> project "finance"
+--    (rbhbxzshoawolrjkmdso) -> Restore / Unpause.
+--
+--    It was paused, never deleted, precisely so this step exists. Its copy
+--    of budgie_sync is still there, exactly as it was on 2026-09-06 at
+--    version 106. If nothing has synced since the move, you are already
+--    done after step 3 -- skip step 2 entirely.
+--
+-- ---------------------------------------------------------------------
+-- 2. Only if the app has synced since the move: carry the newer row back.
+--
+--    Read it out of this project and write it into the finance project.
+--    Both keys are the public anon keys that ship in the browser bundles.
+--
+--    curl -sS "https://kxcljwwfpmyyipbodtsi.supabase.co/rest/v1/budgie_sync?select=household,version,ciphertext,updated_at" \
+--      -H "apikey: $NEW_ANON" -H "Authorization: Bearer $NEW_ANON" \
+--      -H "Accept-Profile: finance" -o row.json
+--
+--    curl -sS -X POST "https://rbhbxzshoawolrjkmdso.supabase.co/rest/v1/budgie_sync" \
+--      -H "apikey: $OLD_ANON" -H "Authorization: Bearer $OLD_ANON" \
+--      -H "Content-Type: application/json" \
+--      -H "Prefer: return=minimal,resolution=merge-duplicates" \
+--      --data-binary @row.json
+--
+--    Then confirm the ciphertext matches on both sides before continuing:
+--      select md5(ciphertext), length(ciphertext) from budgie_sync;
+--
+--    The row is readable on either side because the encryption key is
+--    pinned by VITE_SYNC_REALM, not derived from whichever host it sits on.
+--
+-- ---------------------------------------------------------------------
+-- 3. Point the finance app back, in its Vercel project's env vars:
+--
+--      VITE_SUPABASE_URL     = https://rbhbxzshoawolrjkmdso.supabase.co
+--      VITE_SUPABASE_ANON_KEY= (the finance project's anon key)
+--      VITE_SUPABASE_SCHEMA  = (delete this variable)
+--      VITE_SYNC_REALM       = (leave it set -- see the warning below)
+--
+--    KEEP VITE_SYNC_REALM. It pins the encryption key and household id to
+--    rbhbxzshoawolrjkmdso.supabase.co. Back on that host the pinned value
+--    and the derived value are identical, so keeping it changes nothing --
+--    but removing it while pointed anywhere else silently starts a brand
+--    new, empty household. It is only safe to remove once the app is back
+--    on the original host for good.
+--
+--    Redeploy, open the app, and confirm it syncs. On each device that had
+--    already connected, use Settings -> Family sync -> reconnect with the
+--    same passphrase, since the stored connection remembers the old URL.
+--
+-- ---------------------------------------------------------------------
+-- 4. Only once steps 1-3 are verified working: remove the lodger.
+--
+--    This deletes this project's copy of the finance data. Do not run it
+--    until the finance app is confirmed syncing against its own project
+--    again -- there is no undo for this step.
+
+-- drop schema finance cascade;
+
+-- And drop the schema from PostgREST's exposed list. If Settings -> API ->
+-- Exposed schemas lists "finance", remove it there. If it was exposed with
+-- the role-level setting instead, undo that with:
+
+-- alter role authenticator set pgrst.db_schemas = 'public, graphql_public';
+-- notify pgrst, 'reload config';
+-- notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------------------
+-- Nothing above touches `public`. The recipes site is unaffected by every
+-- step of this rollback.
