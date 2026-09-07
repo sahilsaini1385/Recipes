@@ -24,7 +24,7 @@ export function ServingsControl({
   const clamp = (n: number) => Math.min(999, Math.max(1, Math.round(n)));
 
   return (
-    <div className="rounded-xl border border-[#dcc9a8] bg-paper-warm/70 p-3">
+    <div className="rounded-xl border border-paper-line bg-paper-warm/70 p-3">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint">
           Servings

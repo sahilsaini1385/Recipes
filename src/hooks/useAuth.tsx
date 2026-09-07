@@ -26,16 +26,21 @@ const AuthContext = createContext<AuthState>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isFamily, setIsFamily] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  // The allowlist check is a second round-trip. Until it lands we are still
+  // loading -- otherwise a family member briefly renders as an outsider and
+  // gets told they aren't on the list.
+  const [familyChecked, setFamilyChecked] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      setLoading(false);
+      setSessionChecked(true);
+      setFamilyChecked(true);
       return;
     }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      setLoading(false);
+      setSessionChecked(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
@@ -50,17 +55,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId) {
       setIsFamily(false);
+      setFamilyChecked(sessionChecked);
       return;
     }
     let cancelled = false;
-    supabase.rpc("is_family").then(({ data, error }) => {
-      if (cancelled || error) return;
+    setFamilyChecked(false);
+    const check = async (attempt: number): Promise<void> => {
+      const { data, error } = await supabase.rpc("is_family");
+      if (cancelled) return;
+      if (error) {
+        // One retry covers a dropped connection; after that keep whatever we
+        // last knew rather than wrongly demoting a family member.
+        if (attempt === 0) {
+          await new Promise((r) => setTimeout(r, 1500));
+          if (!cancelled) await check(1);
+          return;
+        }
+        setFamilyChecked(true);
+        return;
+      }
       setIsFamily(Boolean(data));
-    });
+      setFamilyChecked(true);
+    };
+    void check(0);
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, sessionChecked]);
+
+  const loading = !sessionChecked || !familyChecked;
 
   const signOut = async () => {
     await supabase.auth.signOut();

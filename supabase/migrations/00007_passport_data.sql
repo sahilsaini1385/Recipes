@@ -1,5 +1,14 @@
--- Family passport data loaded from the family travel sheet (completed trips).
--- Idempotent: safe to re-run. Requires migrations 00005 and 00006 first.
+-- HISTORICAL BOOTSTRAP -- the family Google Sheet is now the source of truth.
+--
+-- The passport-sync edge function replaces every country and state row for
+-- anyone who has a column in the sheet, so running this file against a
+-- database that has already synced changes nothing you will see. It is kept
+-- for provenance and to seed a brand-new database before the first sync.
+--
+-- Note the country codes below predate splitting the United Kingdom into
+-- England / Scotland / Wales / Northern Ireland; the first sync corrects them.
+--
+-- Safe to re-run. Requires migrations 00005 and 00006 first.
 
 -- 1. Family members (only inserted if not already present by name)
 insert into public.family_members (name, sort_index)
@@ -8,7 +17,7 @@ select v.name, v.idx from (values
   ('Nancy', 2),
   ('Kathryn', 3),
   ('Sahil', 4),
-  ('WR', 5),
+  ('Will', 5),
   ('Rickie', 6)
 ) as v(name, idx)
 where not exists (select 1 from public.family_members fm where fm.name = v.name);

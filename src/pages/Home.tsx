@@ -9,6 +9,18 @@ import { CATEGORIES } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 import type { Recipe } from "@/lib/types";
 
+// The filter row's pills — the Favorites toggle and the category chips — are
+// the same control in two flavours, so they share their styling here.
+const CHIP_BASE =
+  "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95";
+const CHIP_ON =
+  "border-accent-dark/40 bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(78,59,33,0.18)]";
+const CHIP_OFF =
+  "border-paper-line bg-paper-card text-ink-soft hover:border-accent/40 hover:text-ink";
+const CHIP_COUNT = "rounded-full px-1.5 text-[11px] tabular-nums";
+const CHIP_COUNT_ON = "bg-white/25 text-white";
+const CHIP_COUNT_OFF = "bg-paper-warm text-ink-faint";
+
 function matchesQuery(recipe: Recipe, q: string): boolean {
   const needle = q.toLowerCase();
   if (recipe.title.toLowerCase().includes(needle)) return true;
@@ -57,7 +69,7 @@ export default function Home() {
           placeholder="Search recipes and ingredients…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="h-12 rounded-full border-[#dcc9a8] bg-[#fffdf8] pl-10 shadow-[inset_0_1px_2px_rgba(78,59,33,0.05)] placeholder:font-serif placeholder:italic placeholder:text-ink-faint focus-visible:ring-accent/60"
+          className="h-12 rounded-full border-paper-line bg-paper-card pl-10 shadow-[inset_0_1px_2px_rgba(78,59,33,0.05)] placeholder:font-serif placeholder:italic placeholder:text-ink-faint focus-visible:ring-accent/60"
         />
       </div>
 
@@ -65,12 +77,7 @@ export default function Home() {
       <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
         <button
           onClick={() => setFavoritesOnly(!favoritesOnly)}
-          className={cn(
-            "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95",
-            favoritesOnly
-              ? "border-accent-dark/40 bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(78,59,33,0.18)]"
-              : "border-[#dcc9a8] bg-[#fffdf8] text-ink-soft hover:border-accent/40 hover:text-ink"
-          )}
+          className={cn(CHIP_BASE, favoritesOnly ? CHIP_ON : CHIP_OFF)}
         >
           <Heart
             className={cn(
@@ -82,10 +89,8 @@ export default function Home() {
           {favoriteCount > 0 && (
             <span
               className={cn(
-                "rounded-full px-1.5 text-xs",
-                favoritesOnly
-                  ? "bg-white/25 text-[11px] tabular-nums text-white"
-                  : "bg-paper-warm text-[11px] tabular-nums text-ink-faint"
+                CHIP_COUNT,
+                favoritesOnly ? CHIP_COUNT_ON : CHIP_COUNT_OFF
               )}
             >
               {favoriteCount}
@@ -121,7 +126,7 @@ export default function Home() {
         </div>
       )}
       {!loading && !error && filtered.length === 0 && (
-        <div className="mt-10 rounded-2xl border border-dashed border-[#dcc9a8] bg-[#fffdf8]/60 px-6 py-10 text-center">
+        <div className="mt-10 rounded-2xl border border-dashed border-paper-line bg-paper-card/60 px-6 py-10 text-center">
           <p className="font-serif italic text-ink-soft">
             {recipes && recipes.length === 0
               ? "No recipes yet. Sign in and add the first one."
@@ -161,20 +166,10 @@ function CategoryChip({
   return (
     <button
       onClick={onClick}
-      className={cn(
-        "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95",
-        active
-          ? "border-accent-dark/40 bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(78,59,33,0.18)]"
-          : "border-[#dcc9a8] bg-[#fffdf8] text-ink-soft hover:border-accent/40 hover:text-ink"
-      )}
+      className={cn(CHIP_BASE, active ? CHIP_ON : CHIP_OFF)}
     >
       {label}
-      <span
-        className={cn(
-          "rounded-full px-1.5 text-xs",
-          active ? "bg-white/25 text-[11px] tabular-nums text-white" : "bg-paper-warm text-[11px] tabular-nums text-ink-faint"
-        )}
-      >
+      <span className={cn(CHIP_COUNT, active ? CHIP_COUNT_ON : CHIP_COUNT_OFF)}>
         {count}
       </span>
     </button>

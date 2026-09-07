@@ -11,16 +11,26 @@ function notify() {
   for (const fn of listeners) fn();
 }
 
-export async function refreshRecipes(): Promise<Recipe[]> {
-  if (!isSupabaseConfigured) return [];
-  const { data, error } = await supabase
-    .from("recipes")
-    .select("*")
-    .order("title");
-  if (error) throw error;
-  cache = (data ?? []) as Recipe[];
-  notify();
-  return cache;
+let inFlight: Promise<Recipe[]> | null = null;
+
+/** Fetch the collection, coalescing concurrent callers into one request. */
+export function refreshRecipes(): Promise<Recipe[]> {
+  if (!isSupabaseConfigured) return Promise.resolve([]);
+  inFlight ??= (async () => {
+    try {
+      const { data, error } = await supabase
+        .from("recipes")
+        .select("*")
+        .order("title");
+      if (error) throw error;
+      cache = (data ?? []) as Recipe[];
+      notify();
+      return cache;
+    } finally {
+      inFlight = null;
+    }
+  })();
+  return inFlight;
 }
 
 export function invalidateRecipes() {
@@ -33,12 +43,24 @@ export function useRecipes() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const update = () => setRecipes(cache);
+    let alive = true;
+    const fetchOnce = () => {
+      refreshRecipes().catch((e) => {
+        if (alive) setError((e as Error).message);
+      });
+    };
+    // When the cache is emptied (after a save, say) every mounted consumer
+    // hears about it. Refetch instead of sitting on a null cache forever,
+    // and never call setState after unmount.
+    const update = () => {
+      if (!alive) return;
+      setRecipes(cache);
+      if (!cache) fetchOnce();
+    };
     listeners.add(update);
-    if (!cache) {
-      refreshRecipes().catch((e) => setError(e.message));
-    }
+    if (!cache) fetchOnce();
     return () => {
+      alive = false;
       listeners.delete(update);
     };
   }, []);

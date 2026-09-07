@@ -1,90 +1,111 @@
-# Jungman Family Recipes
+# The Jungman Family Site
 
-A mobile-first family recipe website. Browse and search recipes, rescale any
-recipe's ingredient amounts to a chosen number of servings, and let family
-members add new recipes — by structured form, by pasting text, or by
-uploading a photo, PDF, Word file, or a whole .zip of recipe documents that
-get parsed automatically (with duplicate collapsing and per-recipe review).
+A mobile-first private site for one family, with three sections:
 
-**Stack:** React + Vite + Tailwind (shadcn-style components) · Supabase
-(Postgres, Storage, magic-link auth, Edge Functions) · Anthropic API for smart
-import · deployable to Vercel or Netlify on free tiers.
+- **Recipes** — browse and search the family collection, rescale any recipe to
+  a chosen number of servings, flip between US and metric units, cook with the
+  screen kept awake, and add new recipes by form, by pasted text, or by
+  uploading photos / PDFs / Word files / a whole `.zip` that get read
+  automatically (duplicates collapsed, each recipe reviewed before it saves).
+- **Family Passport** — every country and US state each family member has
+  visited, kept in sync from a Google Sheet, with a progress tracker toward
+  all 195 countries.
+- **Family Tree** — a multi-generation chart with spouses, birth and death
+  years, divorces, and in-law branches; new people can be added from the page.
+
+**Stack:** React + Vite + TypeScript + Tailwind (shadcn-style components) ·
+Supabase (Postgres with Row Level Security, Storage, password auth, Edge
+Functions) · Anthropic API for recipe import and cost estimates · deployed on
+Vercel's free tier.
+
+Every secret lives server-side in an edge function. The only key the browser
+ever sees is the Supabase anon key, which is public by design — all access
+control is enforced by RLS in Postgres.
 
 ---
 
-## Setup (one time, ~15 minutes)
+## Setup
 
-### 1. Supabase project
+### 1. Database
 
-1. Create a free project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor**, paste the contents of
-   `supabase/migrations/00001_init.sql`, and run it. This creates:
-   - the `recipes` and `favorites` tables with Row Level Security
-     (everyone reads, only allowlisted family members write),
-   - the `allowed_emails` allowlist (seeded with `ss3694@cornell.edu`),
-   - the public `recipe-photos` storage bucket and its policies.
-3. Add more family members to the allowlist (SQL Editor):
-   ```sql
-   insert into allowed_emails (email) values ('mom@example.com'), ('dad@example.com');
-   ```
-4. In **Authentication → URL Configuration**, set the Site URL to your
-   deployed URL (add it again after step 3 below if you don't know it yet).
-   Email magic-link auth is enabled by default.
+Create a free project at [supabase.com](https://supabase.com), then open the
+**SQL Editor** and run the files in `supabase/migrations/` **in order**:
 
-### 2. Smart import edge function
+| File | What it adds |
+| --- | --- |
+| `00001_init.sql` | `recipes` + `favorites`, RLS, the `allowed_emails` allowlist, the `recipe-photos` storage bucket |
+| `00002_drive_sync.sql` | `drive_files` — remembers which Drive files were already imported or skipped |
+| `00003_cost_per_serving.sql` | cost-estimate column |
+| `00004_password_auth.sql` | `email_allowed()` so the sign-in page can check the allowlist before creating an account |
+| `00005_passport.sql` | `family_members` + `country_visits` |
+| `00006_state_visits.sql` | `state_visits` |
+| `00007_passport_data.sql` | the family's members (seed data) |
+| `00008_family_tree.sql` | `tree_nodes` |
+| `00009`–`00012` | tree columns and people added later (grandparents, years, divorce flag, Marilyn's family) |
 
-Requires the [Supabase CLI](https://supabase.com/docs/guides/cli) and an
-Anthropic API key:
+They are all safe to re-run, with one deliberate exception: `00004` contains a
+commented-out one-time statement that resets every family password. It is left
+commented out so re-running the file can't overwrite a password someone has
+since chosen.
+
+Add family members to the allowlist:
+
+```sql
+insert into allowed_emails (email) values ('mom@example.com'), ('dad@example.com');
+```
+
+In **Authentication → Sign In / Providers → Email**, turn **off** "Confirm
+email" so first-time password sign-ins don't need an email round-trip. In
+**Authentication → URL Configuration**, set the Site URL to the deployed URL
+(the site falls back to a magic link if a password sign-in fails).
+
+### 2. Edge functions
+
+All four need the [Supabase CLI](https://supabase.com/docs/guides/cli):
 
 ```sh
 supabase login
 supabase link --project-ref YOUR-PROJECT-REF
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-supabase functions deploy parse-recipe
 ```
 
-The key is stored as a server-side secret and never reaches the browser. The
-function also requires a signed-in, allowlisted user, so it can't be abused
-by strangers.
+Each function checks that the caller is a signed-in, allowlisted family member
+before doing any work, so none of them can be used by a stranger.
 
-(If you skip this step, everything else still works — only the "Import" tab
-will error. The structured form never touches the LLM.)
-
-### 3. Deploy the site (Vercel shown; Netlify config is included too)
-
-1. Push this repo to GitHub and import it at [vercel.com](https://vercel.com).
-2. Framework preset: **Vite**. Add two environment variables (from your
-   Supabase project's **Settings → API**):
-   - `VITE_SUPABASE_URL` — the project URL
-   - `VITE_SUPABASE_ANON_KEY` — the anon/public key (safe to expose; all
-     access control is enforced by RLS in Postgres)
-3. Deploy. You get a shareable `*.vercel.app` URL that works on phones.
-4. Go back to Supabase **Authentication → URL Configuration** and set the
-   Site URL (and Redirect URL) to that deployed URL so magic links land on
-   the live site.
-
-### 4. Seed data (optional)
-
-If you have a `recipes.json` file (an array of recipe objects matching the
-schema in `src/lib/types.ts`), import it once:
+| Function | Secrets it needs | What it does |
+| --- | --- | --- |
+| `parse-recipe` | `ANTHROPIC_API_KEY` | reads a photo/PDF/document/pasted text and returns a structured recipe |
+| `estimate-costs` | `ANTHROPIC_API_KEY` | fills in the per-serving cost estimate for recipes that don't have one |
+| `drive-sync` | `GOOGLE_API_KEY`, `GOOGLE_DRIVE_FOLDER_ID` | lists and downloads new files from a shared Drive folder |
+| `passport-sync` | `PASSPORT_SHEET_ID` | reads the passport Google Sheet and updates the countries and states tables |
 
 ```sh
-SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co \
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key \
-node scripts/seed.mjs recipes.json
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-... \
+  GOOGLE_API_KEY=... GOOGLE_DRIVE_FOLDER_ID=... PASSPORT_SHEET_ID=...
+
+supabase functions deploy parse-recipe
+supabase functions deploy estimate-costs
+supabase functions deploy drive-sync
+supabase functions deploy passport-sync
 ```
 
-The seed is idempotent and de-duplicates by normalized title ("Copy of X",
-"X (1)", and the same recipe saved as both .doc and .docx collapse to one,
-keeping the most complete version). Entries with no ingredients and no steps
-are skipped as non-recipes. Re-running never creates duplicates.
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are
+injected by Supabase automatically — don't set them yourself.
 
-Don't have a `recipes.json`? The easier path is the app's **Import** tab: it
-accepts pasted text, photos, PDFs, .docx/.doc/.txt files — or a whole **.zip**
-of the family collection. Zips are unpacked in the browser, every document is
-parsed, "Copy of X" / "(1)" / .doc-vs-.docx duplicates are collapsed keeping
-the most complete version, and you review each recipe before it saves.
-(Requires the parse-recipe edge function from step 2.)
+Skipping a function only disables its feature; the rest of the site keeps
+working. (The structured recipe form never touches the LLM.)
+
+### 3. Deploy
+
+1. Push this repo to GitHub and import it at [vercel.com](https://vercel.com).
+2. Framework preset: **Vite**. Add two environment variables from the Supabase
+   project's **Settings → API**:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+3. Deploy, then put that URL back into Supabase's **Authentication → URL
+   Configuration** so sign-in links land on the live site.
+
+`vercel.json` rewrites every path to `index.html`, which is what makes deep
+links like `/recipe/pot-roast` work on a single-page app.
 
 ---
 
@@ -97,15 +118,22 @@ npm run dev
 ```
 
 ```sh
-npm test        # unit tests for the serving scaler and ingredient parser
+npm test        # unit tests
 npm run build   # production build (dist/)
+npx tsc --noEmit
 ```
+
+The passport sheet is the source of truth: `passport-sync` re-reads it, adds
+what's new and removes what's gone, so editing the sheet updates the site.
+`src/lib/dataDrift.test.ts` guards the country, state and category lists, which
+necessarily exist in three places at once (the site's TypeScript, the Deno edge
+function that can't import from `src/`, and a SQL `CHECK` constraint) — the
+test fails if they ever stop agreeing.
 
 ## How the serving scaler works
 
-- Each recipe stores `base_servings`; the page-level control changes a local
-  target and every ingredient re-renders live. Nothing is written back to the
-  database.
+- Each recipe stores `base_servings`; the page control changes a local target
+  and every ingredient re-renders live. Nothing is written back to the database.
 - Scale factor = `target / base`. Only ingredients with a parsed numeric
   `quantity` are multiplied.
 - Amounts format like a cookbook: fractions in halves/thirds/quarters/eighths
@@ -120,10 +148,33 @@ npm run build   # production build (dist/)
 ## Project layout
 
 ```
-supabase/migrations/00001_init.sql   schema, RLS, storage bucket, allowlist
-supabase/functions/parse-recipe/     LLM import (Anthropic key stays server-side)
-scripts/seed.mjs                     idempotent recipes.json importer
-src/lib/scaling.ts                   serving scaler (unit-tested)
-src/lib/parseIngredient.ts           free-text ingredient parser
-src/pages/                           Home, Recipe, CookMode, Add, Edit, SignIn
+supabase/migrations/      schema, RLS, storage bucket, allowlist, seed data
+supabase/functions/       parse-recipe, estimate-costs, drive-sync, passport-sync
+scripts/seed.mjs          one-off idempotent recipes.json importer
+src/pages/                Home, RecipePage, AddRecipe, EditRecipe, SignIn,
+                          Passport, FamilyTree
+src/components/           Header, BottomNav, RecipeCard, RecipeForm, CookMode,
+                          IngredientList, ServingsControl, UnitToggle, ui/
+src/hooks/                useAuth, useRecipes, useFavorites, usePassport,
+                          useFamilyTree, useCostEstimates, useUnitSystem,
+                          useWakeLock
+src/lib/scaling.ts        serving scaler (unit-tested)
+src/lib/parseIngredient.ts free-text ingredient parser
+src/lib/treeLayout.ts     family-tree geometry engine (unit-tested)
+src/lib/countries.ts      country list, names and flags (incl. UK countries)
+src/lib/dedupe.ts         collapses "Copy of X" / "(1)" / .doc-vs-.docx
 ```
+
+### One-off seed script
+
+If you have a `recipes.json` (an array matching `src/lib/types.ts`):
+
+```sh
+SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key \
+node scripts/seed.mjs recipes.json
+```
+
+It de-duplicates by normalized title, skips entries with no ingredients and no
+steps, and never creates duplicates when re-run. The app's **Import** tab is
+the easier path for everything else.

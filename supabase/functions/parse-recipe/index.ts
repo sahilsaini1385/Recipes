@@ -7,7 +7,7 @@
 //
 // Deploy: supabase functions deploy parse-recipe
 
-import Anthropic from "npm:@anthropic-ai/sdk";
+import Anthropic from "npm:@anthropic-ai/sdk@0.124.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CATEGORIES = [
@@ -213,11 +213,29 @@ Deno.serve(async (req) => {
     if (response.stop_reason === "refusal") {
       return json({ error: "The model declined to process this input" }, 422);
     }
+    if (response.stop_reason === "max_tokens") {
+      // The JSON is cut off mid-structure; parsing it would only produce a
+      // baffling syntax error in the import list.
+      return json(
+        {
+          error:
+            "This recipe is too long to read in one pass. Try splitting it into separate files, one recipe each.",
+        },
+        413
+      );
+    }
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
       return json({ error: "No output produced" }, 502);
     }
-    return json(JSON.parse(textBlock.text));
+    try {
+      return json(JSON.parse(textBlock.text));
+    } catch {
+      return json(
+        { error: "The recipe came back in an unreadable form. Try again." },
+        502
+      );
+    }
   } catch (e) {
     console.error("parse-recipe failed:", e);
     return json({ error: (e as Error).message ?? "Parse failed" }, 502);

@@ -306,14 +306,24 @@ function parseCountryTab(grid: Grid): {
   return { people, unmatched, excluded };
 }
 
-/** VACADATA: find the columns headed WRJ / KVJ and collect state codes. */
+/**
+ * VACADATA: find the columns headed WRJ / KVJ and collect state codes.
+ *
+ * These columns are split into more than one block with a wide blank gap
+ * between them, so unlike the country lists we deliberately read to the
+ * bottom of the column rather than stopping at the first run of blanks.
+ * Two guards keep stray text out: we start below the first header, and we
+ * only accept cells with no lowercase letters -- the abbreviations are
+ * always typed in caps, so ordinary words ("or", "in", "me") that happen to
+ * collide with state codes are ignored.
+ */
 function parseStatesTab(grid: Grid): Record<string, string[]> {
-  const columns: Record<string, number> = {};
+  const columns: Record<string, { col: number; headerRow: number }> = {};
   outer: for (let i = 0; i < grid.length; i++) {
     for (let j = 0; j < grid[i].length; j++) {
       const cell = grid[i][j].toUpperCase();
       if (STATE_COLUMN_OWNERS[cell] && columns[cell] === undefined) {
-        columns[cell] = j;
+        columns[cell] = { col: j, headerRow: i };
         if (Object.keys(columns).length === Object.keys(STATE_COLUMN_OWNERS).length) {
           break outer;
         }
@@ -322,11 +332,14 @@ function parseStatesTab(grid: Grid): Record<string, string[]> {
   }
 
   const result: Record<string, string[]> = {};
-  for (const [initials, col] of Object.entries(columns)) {
+  for (const [initials, place] of Object.entries(columns)) {
     const owner = STATE_COLUMN_OWNERS[initials];
     const codes = new Set<string>();
-    for (const row of grid) {
-      const code = stateCodeFor(row[col] ?? "");
+    for (let row = place.headerRow + 1; row < grid.length; row++) {
+      const raw = (grid[row] ?? [])[place.col] ?? "";
+      if (!raw || /[a-z]/.test(raw)) continue;
+      if (STATE_COLUMN_OWNERS[raw.toUpperCase()]) continue; // repeated header
+      const code = stateCodeFor(raw);
       if (code) codes.add(code);
     }
     result[owner] = [...codes];
@@ -335,6 +348,11 @@ function parseStatesTab(grid: Grid): Record<string, string[]> {
 }
 
 // ---------------------------------------------------------------------------
+
+/** PostgREST `in` list, quoted so codes like GB-ENG survive intact. */
+function quoteList(values: string[]): string {
+  return `(${values.map((v) => `"${v}"`).join(",")})`;
+}
 
 function parseSheetId(raw: string): string {
   const m = raw.match(/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -435,14 +453,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Replace country visits for everyone who has a sheet column.
+    // Bring country visits in line with the sheet. Add first, remove after:
+    // clearing everything up front means any later failure would leave the
+    // family with an empty passport, whereas the worst case here is a stale
+    // row that the next sync tidies away.
     let countryRows = 0;
-    const ids = Object.values(memberIds);
-    const { error: delErr } = await db
-      .from("country_visits")
-      .delete()
-      .in("member_id", ids);
-    if (delErr) throw new Error(`Clearing countries failed: ${delErr.message}`);
     const countryInserts = people.flatMap((p) =>
       p.codes.map((code) => ({
         member_id: memberIds[p.name],
@@ -450,9 +465,26 @@ Deno.serve(async (req) => {
       }))
     );
     if (countryInserts.length > 0) {
-      const { error } = await db.from("country_visits").insert(countryInserts);
+      const { error } = await db
+        .from("country_visits")
+        .upsert(countryInserts, {
+          onConflict: "member_id,country_code",
+          ignoreDuplicates: true,
+        });
       if (error) throw new Error(`Saving countries failed: ${error.message}`);
       countryRows = countryInserts.length;
+    }
+    for (const p of people) {
+      const stale = db
+        .from("country_visits")
+        .delete()
+        .eq("member_id", memberIds[p.name]);
+      const { error } = p.codes.length
+        ? await stale.not("country_code", "in", quoteList(p.codes))
+        : await stale;
+      if (error) {
+        throw new Error(`Tidying ${p.name}'s countries failed: ${error.message}`);
+      }
     }
 
     // Replace state visits for the people the sheet tracks states for.
@@ -462,28 +494,42 @@ Deno.serve(async (req) => {
       .map((name) => memberIds[name])
       .filter(Boolean);
     if (stateOwnerIds.length > 0) {
-      const { error: sDelErr } = await db
-        .from("state_visits")
-        .delete()
-        .in("member_id", stateOwnerIds);
-      if (sDelErr) {
-        warnings.push(
-          `States were skipped (${sDelErr.message}) — run the state_visits SQL migration.`
-        );
-      } else {
-        const stateInserts = Object.entries(statesByOwner).flatMap(
-          ([name, codes]) =>
-            memberIds[name]
-              ? codes.map((code) => ({
-                  member_id: memberIds[name],
-                  state_code: code,
-                }))
-              : []
-        );
-        if (stateInserts.length > 0) {
-          const { error } = await db.from("state_visits").insert(stateInserts);
-          if (error) warnings.push(`Saving states failed: ${error.message}`);
-          else stateRows = stateInserts.length;
+      const stateInserts = Object.entries(statesByOwner).flatMap(
+        ([name, codes]) =>
+          memberIds[name]
+            ? codes.map((code) => ({
+                member_id: memberIds[name],
+                state_code: code,
+              }))
+            : []
+      );
+      // Same add-then-tidy order as the countries above. A missing
+      // state_visits table (migration 00006 not yet run) is reported as a
+      // warning rather than failing the whole sync.
+      if (stateInserts.length > 0) {
+        const { error } = await db
+          .from("state_visits")
+          .upsert(stateInserts, {
+            onConflict: "member_id,state_code",
+            ignoreDuplicates: true,
+          });
+        if (error) {
+          warnings.push(
+            `States were skipped (${error.message}) — run the state_visits SQL migration.`
+          );
+        } else {
+          stateRows = stateInserts.length;
+          for (const [name, codes] of Object.entries(statesByOwner)) {
+            if (!memberIds[name] || codes.length === 0) continue;
+            const { error: sDelErr } = await db
+              .from("state_visits")
+              .delete()
+              .eq("member_id", memberIds[name])
+              .not("state_code", "in", quoteList(codes));
+            if (sDelErr) {
+              warnings.push(`Tidying ${name}'s states failed: ${sDelErr.message}`);
+            }
+          }
         }
       }
     }

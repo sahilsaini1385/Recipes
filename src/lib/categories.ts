@@ -12,4 +12,3 @@ export const CATEGORIES = [
   "Soup",
 ] as const;
 
-export type Category = (typeof CATEGORIES)[number];

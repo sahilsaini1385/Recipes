@@ -5,7 +5,7 @@
 // background when a family member visits, until every recipe is priced.
 // Uses the same ANTHROPIC_API_KEY secret as parse-recipe.
 
-import Anthropic from "npm:@anthropic-ai/sdk";
+import Anthropic from "npm:@anthropic-ai/sdk@0.124.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {

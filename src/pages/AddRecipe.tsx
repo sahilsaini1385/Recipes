@@ -12,7 +12,7 @@ import {
 } from "@/components/RecipeForm";
 import { useAuth } from "@/hooks/useAuth";
 import { useRecipes } from "@/hooks/useRecipes";
-import { supabase } from "@/lib/supabase";
+import { supabase, functionErrorMessage } from "@/lib/supabase";
 import { createRecipe } from "@/lib/saveRecipe";
 import { extractFromFile, type ExtractedEntry } from "@/lib/extractDocs";
 import {
@@ -105,16 +105,20 @@ export default function AddRecipe() {
   }, [queue, queueIndex]);
 
   // Persist the unreviewed remainder so an interrupted session can resume.
+  // This runs even once the queue is exhausted: leaving the last saved
+  // recipe behind in storage would offer it again on resume and create a
+  // duplicate.
   useEffect(() => {
-    if (queue.length > 0 && queueIndex < queue.length) {
-      try {
-        localStorage.setItem(
-          PENDING_KEY,
-          JSON.stringify(queue.slice(queueIndex))
-        );
-      } catch {
-        // storage full — resume just won't be available
+    if (queue.length === 0) return;
+    const remaining = queue.slice(queueIndex);
+    try {
+      if (remaining.length > 0) {
+        localStorage.setItem(PENDING_KEY, JSON.stringify(remaining));
+      } else {
+        localStorage.removeItem(PENDING_KEY);
       }
+    } catch {
+      // storage full — resume just won't be available
     }
   }, [queue, queueIndex]);
 
@@ -176,20 +180,7 @@ export default function AddRecipe() {
         body,
       }));
     }
-    if (error) {
-      // Surface the real reason from the function's JSON body when present.
-      let detail = error.message || "Import failed";
-      const ctx = (error as { context?: Response }).context;
-      if (ctx && typeof ctx.json === "function") {
-        try {
-          const payload = await ctx.json();
-          if (payload?.error) detail = payload.error;
-        } catch {
-          // body wasn't JSON — keep the generic message
-        }
-      }
-      throw new Error(detail);
-    }
+    if (error) throw new Error(await functionErrorMessage(error, "Import failed"));
     const draft = data as RecipeDraft;
     // The parser returns an empty title when the input isn't a recipe.
     if (!draft.title && !draft.ingredients?.length) return null;
@@ -299,9 +290,11 @@ export default function AddRecipe() {
         if (dupIdx >= 0) {
           duplicates++;
           const existing = appended[dupIdx];
-          // Replace only if the earlier copy hasn't been reviewed yet.
+          // Replace only if the earlier copy is still ahead of the reviewer.
+          // The item on screen is left alone: swapping it under the cook
+          // would discard their edits and mislabel which file was imported.
           if (
-            dupIdx >= queueIndexRef.current &&
+            dupIdx > queueIndexRef.current &&
             completeness(draft) > completeness(existing.draft)
           ) {
             appended[dupIdx] = item;
@@ -711,6 +704,7 @@ export default function AddRecipe() {
         </div>
       ) : !waitingForNext ? (
         <RecipeForm
+          key={queueIndex}
           value={form}
           onChange={setForm}
           onSubmit={save}

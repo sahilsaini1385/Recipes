@@ -14,6 +14,14 @@ interface IngredientRow {
   unit: string;
   item: string;
   note: string;
+  /**
+   * The line exactly as it was written in the source recipe, kept so that
+   * detail the form fields can't hold ("1 (14.5 oz) can diced tomatoes")
+   * survives a round-trip. Dropped as soon as the cook edits the row.
+   */
+  originalRaw?: string;
+  /** The parts `originalRaw` was parsed into, to detect edits. */
+  originalParts?: { quantity: string; unit: string; item: string; note: string };
 }
 
 export interface RecipeFormValue {
@@ -37,12 +45,15 @@ export function draftToForm(draft: Partial<RecipeDraft>): RecipeFormValue {
     source_url: draft.source_url ?? "",
     base_servings: String(draft.base_servings ?? 4),
     servings_estimated: draft.servings_estimated ?? false,
-    ingredients: (draft.ingredients ?? []).map((ing) => ({
-      quantity: formatQtyForInput(ing),
-      unit: ing.unit ?? "",
-      item: ing.item,
-      note: ing.note ?? "",
-    })),
+    ingredients: (draft.ingredients ?? []).map((ing) => {
+      const parts = {
+        quantity: formatQtyForInput(ing),
+        unit: ing.unit ?? "",
+        item: ing.item,
+        note: ing.note ?? "",
+      };
+      return { ...parts, originalRaw: ing.raw, originalParts: parts };
+    }),
     steps: draft.steps?.length ? [...draft.steps] : [""],
     tags: (draft.tags ?? []).join(", "),
     notes: draft.notes ?? "",
@@ -63,16 +74,22 @@ export function formToDraft(form: RecipeFormValue): RecipeDraft {
     .filter((row) => row.item.trim() || row.quantity.trim())
     .map((row) => {
       // Re-parse from the row parts so quantity strings like "1/2" or "2-3"
-      // become real numbers, and the raw line is reconstructed for display.
-      const rawLine = [row.quantity, row.unit, row.item]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
-      const parsed = parseIngredientLine(
-        rawLine + (row.note ? `, ${row.note}` : "")
-      );
+      // become real numbers. The raw line is only rebuilt when the cook
+      // actually changed something -- otherwise the source wording stands.
+      const rebuilt =
+        [row.quantity, row.unit, row.item].filter(Boolean).join(" ").trim() +
+        (row.note ? `, ${row.note}` : "");
+      const o = row.originalParts;
+      const untouched =
+        !!row.originalRaw &&
+        !!o &&
+        o.quantity === row.quantity &&
+        o.unit === row.unit &&
+        o.item === row.item &&
+        o.note === row.note;
+      const parsed = parseIngredientLine(untouched ? row.originalRaw! : rebuilt);
       return {
-        raw: rawLine + (row.note ? `, ${row.note}` : ""),
+        raw: untouched ? row.originalRaw! : rebuilt,
         quantity: parsed.quantity,
         quantity_max: parsed.quantity_max ?? null,
         unit: row.unit.trim() || parsed.unit,
@@ -107,7 +124,6 @@ interface Props {
   submitLabel: string;
   saving: boolean;
   error: string | null;
-  existingPhotoPath?: string | null;
 }
 
 export function RecipeForm({
@@ -253,15 +269,16 @@ export function RecipeForm({
                   value={row.item}
                   onChange={(e) => setIngredient(i, { item: e.target.value })}
                 />
-                {row.note && (
-                  <Input
-                    aria-label="Note"
-                    placeholder="note (e.g. to taste)"
-                    value={row.note}
-                    onChange={(e) => setIngredient(i, { note: e.target.value })}
-                    className="h-9 text-sm text-ink-soft"
-                  />
-                )}
+                {/* Always rendered: gating on row.note made notes
+                    impossible to add, and unmounted the field the moment
+                    one was cleared. */}
+                <Input
+                  aria-label="Note"
+                  placeholder="note (e.g. to taste)"
+                  value={row.note}
+                  onChange={(e) => setIngredient(i, { note: e.target.value })}
+                  className="h-9 text-sm text-ink-soft"
+                />
               </div>
               <div className="flex flex-col">
                 <button

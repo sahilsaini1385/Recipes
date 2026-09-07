@@ -26,9 +26,8 @@ import {
   WORLD_COUNTRY_TARGET,
 } from "@/lib/countries";
 import { US_STATES, stateName, US_STATE_TARGET } from "@/lib/usStates";
+import { firstName } from "@/lib/names";
 import { cn } from "@/lib/utils";
-
-const firstMemberName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
 export default function Passport() {
   const { isFamily } = useAuth();
@@ -150,7 +149,7 @@ export default function Passport() {
               onClick={() => setKind(k)}
               className={cn(
                 "min-h-10 rounded-md px-3.5 text-[12px] font-semibold uppercase tracking-[0.12em] transition-colors",
-                kind === k ? "bg-[#fffdf8] text-accent-dark shadow-sm" : "text-white/85"
+                kind === k ? "bg-paper-card text-accent-dark shadow-sm" : "text-white/85"
               )}
             >
               {lbl}
@@ -170,7 +169,7 @@ export default function Passport() {
           <button
             onClick={() => sync(true)}
             disabled={syncing}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent-dark hover:bg-[#fae7d4]/60 disabled:opacity-50"
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent-dark hover:bg-accent-soft/60 disabled:opacity-50"
           >
             <RefreshCw className={cn("h-3 w-3", syncing && "animate-spin")} />
             Sync now
@@ -215,7 +214,7 @@ export default function Passport() {
               onClick={() => setShowAllMembers(true)}
               className="w-full rounded-2xl border border-dashed border-[#c9b58f] bg-paper-warm/40 px-4 py-3.5 font-serif text-sm italic text-ink-soft transition-colors hover:border-accent/40 hover:bg-paper-warm"
             >
-              {zeroMembers.map((m) => firstMemberName(m.name)).join(", ")}{" "}
+              {zeroMembers.map((m) => firstName(m.name)).join(", ")}{" "}
               {zeroMembers.length === 1 ? "hasn't" : "haven't"} logged any{" "}
               {isCountry ? "countries" : "states"} yet — show{" "}
               {zeroMembers.length === 1 ? "them" : "all"}
@@ -289,7 +288,7 @@ function ProgressTrack({
         aria-hidden
         className={cn(
           "absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed",
-          light ? "border-white/40" : "border-[#d8c5a5]"
+          light ? "border-white/40" : "border-paper-rule"
         )}
       />
       <div
@@ -351,14 +350,14 @@ function MemberCard({
   );
 
   return (
-    <Card className="border-[#dcc9a8] bg-[#fffdf8] p-4 shadow-[0_1px_2px_rgba(78,59,33,0.06),0_6px_16px_-6px_rgba(78,59,33,0.14)] transition-all duration-200 hover:-translate-y-px hover:shadow-[0_2px_4px_rgba(78,59,33,0.07),0_10px_24px_-6px_rgba(191,87,0,0.16)]">
+    <Card className="border-paper-line bg-paper-card p-4 shadow-plate transition-all duration-200 hover:-translate-y-px hover:shadow-plate-hover">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span
             className={cn(
               "flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border px-1 font-serif text-[11px] font-semibold",
               rank <= 3
-                ? "border-accent/35 bg-[#fae7d4] text-accent-dark"
+                ? "border-accent/35 bg-accent-soft text-accent-dark"
                 : "border-paper-deep bg-paper-warm text-ink-faint"
             )}
           >
@@ -410,7 +409,7 @@ function MemberCard({
                 <span
                   key={code}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-[6px] border border-[#dcc9a8] bg-paper/70 py-1 pl-2 text-[13px] text-ink",
+                    "inline-flex items-center gap-1.5 rounded-[6px] border border-paper-line bg-paper/70 py-1 pl-2 text-[13px] text-ink",
                     canEdit ? "pr-1" : "pr-2"
                   )}
                 >
@@ -499,7 +498,7 @@ function PlacePicker({
   }, [q, existing, dataset]);
 
   return (
-    <div className="mt-3 rounded-xl border border-[#dcc9a8] bg-paper p-2 shadow-[inset_0_1px_3px_rgba(78,59,33,0.07)]">
+    <div className="mt-3 rounded-xl border border-paper-line bg-paper p-2 shadow-[inset_0_1px_3px_rgba(78,59,33,0.07)]">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
         <Input
@@ -518,7 +517,7 @@ function PlacePicker({
               onPick(c.code);
               setQ("");
             }}
-            className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-ink hover:bg-[#fffdf8] active:bg-[#fae7d4]"
+            className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-ink hover:bg-paper-card active:bg-accent-soft"
           >
             {symbol(c.code) && (
               <span className="text-lg leading-none">{symbol(c.code)}</span>

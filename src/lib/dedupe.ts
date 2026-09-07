@@ -21,22 +21,3 @@ export function completeness(r: RecipeDraft): number {
     (r.source_url ? 1 : 0)
   );
 }
-
-/**
- * Collapse duplicates within a batch by normalized title, keeping the most
- * complete version of each (handles "Copy of X", "X (1)", .doc vs .docx).
- */
-export function dedupeDrafts<T extends { draft: RecipeDraft }>(
-  items: T[]
-): T[] {
-  const byTitle = new Map<string, T>();
-  for (const item of items) {
-    const key = normalizeTitle(item.draft.title);
-    if (!key) continue;
-    const existing = byTitle.get(key);
-    if (!existing || completeness(item.draft) > completeness(existing.draft)) {
-      byTitle.set(key, item);
-    }
-  }
-  return [...byTitle.values()];
-}

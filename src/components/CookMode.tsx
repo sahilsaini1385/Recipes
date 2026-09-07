@@ -46,7 +46,7 @@ export function CookMode({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-paper">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#dcc9a8] bg-paper/95 px-4 py-3 backdrop-blur">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-paper-line bg-paper/95 px-4 py-3 backdrop-blur">
         <div>
           <h1 className="font-serif text-xl font-semibold leading-tight">
             {recipe.title}
@@ -68,7 +68,7 @@ export function CookMode({
       </div>
 
       <div className="mx-auto max-w-2xl px-4 pb-24 pt-4">
-        <h2 className="mb-3 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-[#dcc9a8]">
+        <h2 className="mb-3 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
           Ingredients
         </h2>
         <ul className="space-y-1">
@@ -109,7 +109,7 @@ export function CookMode({
           ))}
         </ul>
 
-        <h2 className="mb-3 mt-8 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-[#dcc9a8]">
+        <h2 className="mb-3 mt-8 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
           Steps
         </h2>
         <ol className="space-y-2">

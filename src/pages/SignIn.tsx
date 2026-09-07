@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,10 +15,9 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const [linkSent, setLinkSent] = useState(false);
 
-  if (session) {
-    navigate("/");
-    return null;
-  }
+  // Redirect declaratively — calling navigate() in the render body updates
+  // the router while React is rendering.
+  if (session) return <Navigate to="/" replace />;
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,9 +74,12 @@ export default function SignIn() {
       navigate("/");
       return;
     }
-    // Email confirmation is still enabled in Supabase settings.
+    // No session and no error means one of two things, and Supabase
+    // deliberately doesn't say which: either the address already has an
+    // account (so the password was simply wrong), or confirmation email is
+    // still switched on. Cover both rather than claiming an account was made.
     setError(
-      "Account created — check your email to confirm it, then sign in again. (The site owner can turn off this confirmation step in Supabase.)"
+      "That didn't sign you in. If you already have an account the password was wrong — use the family password, or send yourself a magic link below. If this is your first time, check your email for a confirmation link."
     );
     setWorking(false);
   };

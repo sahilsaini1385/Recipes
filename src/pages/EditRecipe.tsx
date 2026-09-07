@@ -78,7 +78,6 @@ export default function EditRecipe() {
         submitLabel="Save changes"
         saving={saving}
         error={error}
-        existingPhotoPath={recipe.photo_path}
       />
     </main>
   );

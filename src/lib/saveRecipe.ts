@@ -42,9 +42,23 @@ export async function createRecipe(
   });
   if (error) throw error;
 
-  invalidateRecipes();
-  await refreshRecipes();
+  await refreshCache();
   return slug;
+}
+
+/**
+ * Refresh the shared recipe cache after a write. Never throws: the row is
+ * already saved at this point, and letting a failed follow-up read bubble up
+ * would make the caller think the save failed and offer a retry, which would
+ * insert the recipe a second time.
+ */
+async function refreshCache(): Promise<void> {
+  invalidateRecipes();
+  try {
+    await refreshRecipes();
+  } catch {
+    // The next mount (or the Home "Try again" button) will refetch.
+  }
 }
 
 export async function updateRecipe(
@@ -66,7 +80,6 @@ export async function updateRecipe(
     .eq("id", id);
   if (error) throw error;
 
-  invalidateRecipes();
-  await refreshRecipes();
+  await refreshCache();
   return slug;
 }

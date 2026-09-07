@@ -17,7 +17,7 @@ export function UnitToggle({ value, onChange, className }: Props) {
       role="group"
       aria-label="Measurement units"
       className={cn(
-        "inline-flex rounded-full border border-[#dcc9a8] bg-[#fffdf8] p-0.5",
+        "inline-flex rounded-full border border-paper-line bg-paper-card p-0.5",
         className
       )}
     >

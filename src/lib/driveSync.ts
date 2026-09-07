@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, functionErrorMessage } from "./supabase";
 import { entryFromBytes, type ExtractedEntry } from "./extractDocs";
 
 export interface DriveFile {
@@ -15,19 +15,7 @@ async function invokeDriveSync(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("drive-sync", {
     body,
   });
-  if (error) {
-    let detail = error.message || "Drive sync failed";
-    const ctx = (error as { context?: Response }).context;
-    if (ctx && typeof ctx.json === "function") {
-      try {
-        const payload = await ctx.json();
-        if (payload?.error) detail = payload.error;
-      } catch {
-        // not JSON
-      }
-    }
-    throw new Error(detail);
-  }
+  if (error) throw new Error(await functionErrorMessage(error, "Drive sync failed"));
   return data;
 }
 
