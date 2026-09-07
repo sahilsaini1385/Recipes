@@ -27,7 +27,7 @@ export function UnitToggle({ value, onChange, className }: Props) {
           onClick={() => onChange(opt.key)}
           aria-pressed={value === opt.key}
           className={cn(
-            "h-9 rounded-full px-3 text-sm font-medium",
+            "h-10 rounded-full px-3.5 text-sm font-medium",
             value === opt.key
               ? "bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]"
               : "text-ink-soft hover:bg-paper-warm"

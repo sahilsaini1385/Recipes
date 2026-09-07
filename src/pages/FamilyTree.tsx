@@ -27,6 +27,20 @@ function yearLine(born: number | null, died: number | null): string {
   return "";
 }
 
+/**
+ * Dates for the detail panel. A card is a couple, so name whose dates are
+ * whose — showing one bare year under "John & Nancy" leaves you guessing.
+ */
+function couplesYears(node: TreeNode): string {
+  const mine = yearLine(node.born_year, node.died_year);
+  if (!node.spouse_name) return mine;
+  const theirs = yearLine(node.spouse_born_year, node.spouse_died_year);
+  const parts: string[] = [];
+  if (mine) parts.push(`${firstName(node.name)} ${mine}`);
+  if (theirs) parts.push(`${firstName(node.spouse_name)} ${theirs}`);
+  return parts.join(" · ");
+}
+
 /** Everyone on this card, below it, and on its ancestor cards. */
 function countAll(node: TreeNode): number {
   return (
@@ -166,7 +180,13 @@ export default function FamilyTree() {
 
   return (
     <main
-      className={cn("mx-auto max-w-3xl px-4 pt-5", selected ? "pb-72" : "pb-16")}
+      // Wider than the other pages: the chart is the one view that can use
+      // every pixel, and boxing it to 768px meant panning sideways past
+      // empty margins on a laptop.
+      className={cn(
+        "mx-auto max-w-6xl px-4 pt-5",
+        selected ? "pb-72" : "pb-16"
+      )}
     >
       <div className="mb-4 rounded-2xl bg-gradient-to-br from-accent to-accent-dark p-5 text-white shadow-card">
         <div className="flex items-center gap-2">
@@ -295,13 +315,23 @@ export default function FamilyTree() {
                 fade.r ? "opacity-100" : "opacity-0"
               )}
             />
-            {/* Generation labels pinned to the left margin. */}
+            {/* Generation labels pinned to the left margin. They sit in the
+                empty band between two rows rather than level with the cards:
+                the chart scrolls sideways underneath them, so anything at a
+                card's own height ends up covering someone's name. */}
             <div className="pointer-events-none absolute left-0 top-0">
               {genLabels.map((g) => (
                 <span
                   key={g.idx}
-                  className="absolute left-0 -translate-y-1/2 rounded-r-full bg-paper-tree/90 py-1 pl-3 pr-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint"
-                  style={{ top: PAD + g.idx * (CARD_H + VGAP) + CARD_H / 2 + 1 }}
+                  className="absolute left-0 -translate-y-1/2 rounded-r-full border border-l-0 border-paper-line bg-paper-tree py-0.5 pl-3 pr-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-ink-faint"
+                  style={{
+                    // The top row has only PAD above it, so its label is
+                    // nudged down to stay inside the chart.
+                    top: Math.max(
+                      13,
+                      PAD + g.idx * (CARD_H + VGAP) - VGAP / 2
+                    ),
+                  }}
                 >
                   {g.text}
                 </span>
@@ -367,8 +397,7 @@ export default function FamilyTree() {
 
             {panel.view === "actions" && !isFamily && (
               <p className="text-sm text-ink-soft">
-                {yearLine(selected.born_year, selected.died_year) ||
-                  "No dates recorded"}
+                {couplesYears(selected) || "No dates recorded"}
                 {" · "}Sign in as family to make changes.
               </p>
             )}
@@ -544,7 +573,9 @@ function ChartCard({
         {label && (
           <span
             title={label}
-            className="absolute inset-x-2 top-1.5 truncate text-center text-[8px] font-semibold uppercase tracking-[0.18em] text-accent-dark/60"
+            // Tight tracking so captions like "Marilyn & William's parents"
+            // fit the fixed card width instead of ending in an ellipsis.
+            className="absolute inset-x-1.5 top-1.5 truncate text-center text-[8px] font-semibold uppercase tracking-[0.04em] text-accent-dark/70"
           >
             {label}
           </span>

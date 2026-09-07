@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ChefHat, Pencil, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -27,8 +27,21 @@ export default function RecipePage() {
 
   // Chosen servings live only in component state — never written to the DB.
   const [servings, setServings] = useState<number | null>(null);
-  const [cooking, setCooking] = useState(false);
   const [units, setUnits] = useUnitSystem();
+
+  // Cook mode lives in the URL (?cook=1) rather than in component state, so
+  // the phone's Back button leaves cook mode instead of leaving the recipe
+  // altogether — and so the cooking view can be refreshed or shared.
+  const [params, setParams] = useSearchParams();
+  const cooking = params.get("cook") === "1";
+  const setCooking = (on: boolean) => {
+    const next = new URLSearchParams(params);
+    if (on) next.set("cook", "1");
+    else next.delete("cook");
+    // Entering pushes a history entry to go Back to; leaving replaces it so
+    // Back doesn't drop you straight back into cook mode.
+    setParams(next, { replace: !on });
+  };
 
   if (loading) {
     return <p className="mt-10 text-center text-ink-soft">Loading…</p>;
@@ -173,7 +186,9 @@ export default function RecipePage() {
       )}
 
       {/* Sits above the phone tab bar; flush with the bottom on larger screens. */}
-      <div className="fixed inset-x-0 bottom-16 z-10 border-t border-paper-line bg-paper/90 p-3 shadow-[0_-4px_16px_-8px_rgba(78,59,33,0.25)] backdrop-blur sm:bottom-0">
+      {/* Opaque, not frosted: at large serving counts the step text scrolls
+          under this bar, and a translucent one let it read through. */}
+      <div className="fixed inset-x-0 bottom-16 z-10 border-t border-paper-line bg-paper p-3 shadow-[0_-4px_16px_-8px_rgba(78,59,33,0.25)] sm:bottom-0">
         <div className="mx-auto max-w-3xl">
           <Button size="lg" className="w-full" onClick={() => setCooking(true)}>
             <ChefHat className="h-5 w-5" />

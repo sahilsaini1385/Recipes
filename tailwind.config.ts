@@ -19,7 +19,13 @@ export default {
         ink: {
           DEFAULT: "#2b2317",
           soft: "#6b5c45",
-          faint: "#9c8a6d",
+          // Deliberately darker than it looks like it should be. This is the
+          // colour of small print -- tab labels, counts, dates, "to taste"
+          // qualifiers -- and at the old #9c8a6d it measured under 3.3:1 on
+          // every paper surface, below the 4.5:1 readability floor. At
+          // #756449 the softest surface still measures 4.75:1 while staying
+          // clearly lighter than ink-soft.
+          faint: "#756449",
         },
         // Texas Longhorn burnt orange
         accent: {

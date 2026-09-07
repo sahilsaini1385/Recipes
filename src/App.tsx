@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, Link } from "react-router-dom";
+import { buttonVariants } from "@/components/ui/button";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import Home from "@/pages/Home";
@@ -10,6 +11,7 @@ import SignIn from "@/pages/SignIn";
 import Passport from "@/pages/Passport";
 import FamilyTree from "@/pages/FamilyTree";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 
 function SetupNotice() {
   return (
@@ -21,6 +23,23 @@ function SetupNotice() {
         variables, then rebuild. See the README for the full setup guide.
       </p>
     </div>
+  );
+}
+
+/** Anything that isn't a real page. Without this, a mistyped or stale link
+ *  painted the header and tab bar with nothing in between. */
+function NotFound() {
+  return (
+    <main className="mx-auto max-w-md px-4 py-20 text-center">
+      <p className="font-serif text-5xl text-accent/40">?</p>
+      <h1 className="mt-4 font-serif text-2xl">This page isn't here</h1>
+      <p className="mt-2 text-ink-soft">
+        The link may be old, or the recipe may have been renamed.
+      </p>
+      <Link to="/" className={cn(buttonVariants(), "mt-6")}>
+        Back to the recipes
+      </Link>
+    </main>
   );
 }
 
@@ -50,6 +69,7 @@ export default function App() {
         <Route path="/passport" element={<Passport />} />
         <Route path="/tree" element={<FamilyTree />} />
         <Route path="/signin" element={<SignIn />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
       <BottomNav />
     </div>

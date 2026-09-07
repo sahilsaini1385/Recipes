@@ -18,9 +18,11 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-11 px-4 text-base",
-        sm: "h-9 px-3 text-sm",
+        // 40px, not 36 — the small buttons are the ones thumbs actually miss.
+        sm: "h-10 px-3.5 text-sm",
         lg: "h-12 px-6 text-lg",
-        icon: "h-11 w-11",
+        // shrink-0 so a crowded flex row can't squeeze it below 44px.
+        icon: "h-11 w-11 shrink-0",
       },
     },
     defaultVariants: {

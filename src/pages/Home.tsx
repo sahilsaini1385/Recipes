@@ -11,8 +11,10 @@ import type { Recipe } from "@/lib/types";
 
 // The filter row's pills — the Favorites toggle and the category chips — are
 // the same control in two flavours, so they share their styling here.
+// h-11 (44px) rather than something daintier: these sit in a horizontal
+// scroller on a phone, where a short chip is easy to swipe past by accident.
 const CHIP_BASE =
-  "flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-all active:scale-95";
+  "flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-all active:scale-95";
 const CHIP_ON =
   "border-accent-dark/40 bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(78,59,33,0.18)]";
 const CHIP_OFF =
@@ -59,6 +61,37 @@ export default function Home() {
     if (query.trim()) list = list.filter((r) => matchesQuery(r, query.trim()));
     return list;
   }, [recipes, category, favoritesOnly, query, favorites]);
+
+  // What to say when nothing shows, phrased for the filter you actually used
+  // — telling someone to "try another search" when they only tapped
+  // Favorites is no help at all.
+  const empty = useMemo(() => {
+    if (recipes && recipes.length === 0) {
+      return {
+        headline: "No recipes yet.",
+        hint: "Sign in and add the first one",
+      };
+    }
+    if (favoritesOnly && favoriteCount === 0) {
+      return {
+        headline: "No favorites yet.",
+        hint: "Tap the heart on any recipe to keep it here",
+      };
+    }
+    if (query.trim()) {
+      return {
+        headline: `Nothing matches “${query.trim()}”.`,
+        hint: category ? "Try clearing the category too" : "Try another word",
+      };
+    }
+    if (category) {
+      return {
+        headline: `Nothing in ${category} yet.`,
+        hint: "Try another category",
+      };
+    }
+    return { headline: "No recipes match.", hint: "Try clearing the filters" };
+  }, [recipes, favoritesOnly, favoriteCount, query, category]);
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16 pt-5">
@@ -127,13 +160,9 @@ export default function Home() {
       )}
       {!loading && !error && filtered.length === 0 && (
         <div className="mt-10 rounded-2xl border border-dashed border-paper-line bg-paper-card/60 px-6 py-10 text-center">
-          <p className="font-serif italic text-ink-soft">
-            {recipes && recipes.length === 0
-              ? "No recipes yet. Sign in and add the first one."
-              : "No recipes match."}
-          </p>
+          <p className="font-serif italic text-ink-soft">{empty.headline}</p>
           <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-ink-faint">
-            Try another search or category
+            {empty.hint}
           </p>
         </div>
       )}

@@ -22,7 +22,9 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-paper-deep/70 bg-paper/95 backdrop-blur-md sm:hidden"
+      // Opaque rather than frosted — page text scrolls underneath it and was
+      // legible through the blur.
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-paper-deep/70 bg-paper sm:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="mx-auto flex h-16 max-w-3xl items-stretch">
@@ -35,7 +37,9 @@ export function BottomNav() {
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors",
-                active ? "text-accent" : "text-ink-faint"
+                // accent-dark, matching the header: plain accent measured
+                // 4.22:1 on paper, just under the readability floor.
+                active ? "text-accent-dark" : "text-ink-faint"
               )}
             >
               <Icon

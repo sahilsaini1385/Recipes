@@ -45,7 +45,9 @@ export function ServingsControl({
           </Button>
         )}
       </div>
-      <div className="mt-2 flex items-center gap-2">
+      {/* Wraps rather than overflowing: on a 320px screen the ×0.5/×2/×3
+          group used to push the row past the edge of the page. */}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button
           variant="secondary"
           size="icon"
@@ -75,7 +77,7 @@ export function ServingsControl({
         >
           <Plus className="h-5 w-5" />
         </Button>
-        <div className="ml-1 flex gap-1">
+        <div className="flex gap-1">
           {MULTIPLIERS.map((m) => (
             <Button
               key={m.label}

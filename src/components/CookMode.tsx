@@ -143,6 +143,21 @@ export function CookMode({
             </li>
           ))}
         </ol>
+
+        {/* The notes often hold the oven-temperature alternative or a timing
+            tip — exactly what you need on the screen you cook from. */}
+        {recipe.notes && (
+          <section className="mt-8 rounded-xl border border-dashed border-paper-line bg-paper-warm/70 p-4">
+            <h2 className="mb-1.5 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80">
+              Notes
+            </h2>
+            <p className="whitespace-pre-wrap font-serif text-lg italic leading-relaxed text-ink-soft">
+              {units === "metric"
+                ? convertTemperatures(recipe.notes)
+                : recipe.notes}
+            </p>
+          </section>
+        )}
       </div>
     </div>
   );
