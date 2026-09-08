@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Luggage, Users } from "lucide-react";
+import { Plus, Luggage, MapPin, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TripForm } from "@/components/TripForm";
@@ -89,6 +89,13 @@ export default function Trips() {
               ? "Where the family has been, and when."
               : `${trips.length} ${trips.length === 1 ? "trip" : "trips"} recorded.`}
         </p>
+        <Link
+          to="/places"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-white/25"
+        >
+          <MapPin className="h-4 w-4" />
+          Every place, across all trips
+        </Link>
       </div>
 
       {isFamily && !adding && (

@@ -1,19 +1,27 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Routes, Route, useLocation, Link } from "react-router-dom";
 import { buttonVariants } from "@/components/ui/button";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import Home from "@/pages/Home";
-import RecipePage from "@/pages/RecipePage";
-import AddRecipe from "@/pages/AddRecipe";
-import EditRecipe from "@/pages/EditRecipe";
-import SignIn from "@/pages/SignIn";
-import Passport from "@/pages/Passport";
-import FamilyTree from "@/pages/FamilyTree";
-import Trips from "@/pages/Trips";
-import TripPage from "@/pages/TripPage";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
+
+// Home stays eager: it is what opens when somebody taps the bookmark, and
+// lazy-loading it would only add a flash of nothing.
+//
+// Everything else loads on demand. A phone opening a recipe was downloading
+// the family-tree layout engine, the document parsers behind the importer and
+// the places browser too, all in one chunk it would never use on that visit.
+const RecipePage = lazy(() => import("@/pages/RecipePage"));
+const AddRecipe = lazy(() => import("@/pages/AddRecipe"));
+const EditRecipe = lazy(() => import("@/pages/EditRecipe"));
+const SignIn = lazy(() => import("@/pages/SignIn"));
+const Passport = lazy(() => import("@/pages/Passport"));
+const FamilyTree = lazy(() => import("@/pages/FamilyTree"));
+const Trips = lazy(() => import("@/pages/Trips"));
+const TripPage = lazy(() => import("@/pages/TripPage"));
+const Places = lazy(() => import("@/pages/Places"));
 
 function SetupNotice() {
   return (
@@ -53,9 +61,11 @@ export default function App() {
       ? "Passport"
       : pathname.startsWith("/tree")
         ? "Family Tree"
-        : pathname.startsWith("/trips")
-          ? "Trips"
-          : "Recipes";
+        : pathname.startsWith("/places")
+          ? "Places"
+          : pathname.startsWith("/trips")
+            ? "Trips"
+            : "Recipes";
     document.title = `Jungman Family · ${section}`;
   }, [pathname]);
 
@@ -65,18 +75,23 @@ export default function App() {
     // Bottom padding keeps content clear of the phone tab bar.
     <div className="min-h-screen pb-16 sm:pb-0">
       <Header />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/recipe/:slug" element={<RecipePage />} />
-        <Route path="/add" element={<AddRecipe />} />
-        <Route path="/edit/:slug" element={<EditRecipe />} />
-        <Route path="/trips" element={<Trips />} />
-        <Route path="/trips/:id" element={<TripPage />} />
-        <Route path="/passport" element={<Passport />} />
-        <Route path="/tree" element={<FamilyTree />} />
-        <Route path="/signin" element={<SignIn />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <Suspense
+        fallback={<p className="mt-10 text-center text-ink-soft">Loading…</p>}
+      >
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/recipe/:slug" element={<RecipePage />} />
+          <Route path="/add" element={<AddRecipe />} />
+          <Route path="/edit/:slug" element={<EditRecipe />} />
+          <Route path="/trips" element={<Trips />} />
+          <Route path="/trips/:id" element={<TripPage />} />
+          <Route path="/places" element={<Places />} />
+          <Route path="/passport" element={<Passport />} />
+          <Route path="/tree" element={<FamilyTree />} />
+          <Route path="/signin" element={<SignIn />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
       <BottomNav />
     </div>
   );

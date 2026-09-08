@@ -11,7 +11,11 @@ const TABS = [
 
 /** Which section a path belongs to (recipes is the catch-all). */
 export function sectionFor(pathname: string): string {
-  if (pathname.startsWith("/trips")) return "/trips";
+  // Places is a view onto every trip's contents, so it lights the Trips tab
+  // rather than earning a fifth one on a phone.
+  if (pathname.startsWith("/trips") || pathname.startsWith("/places")) {
+    return "/trips";
+  }
   if (pathname.startsWith("/passport")) return "/passport";
   if (pathname.startsWith("/tree")) return "/tree";
   return "/";
