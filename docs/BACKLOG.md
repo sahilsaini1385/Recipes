@@ -57,16 +57,11 @@ restaurants and itineraries below have somewhere to live.
 > may reference the same country codes, but `passport-sync` must keep working
 > untouched. Do not make passport counts derive from trips.
 
-- **1.2 — Places and restaurants** *(M)* — *asked for explicitly*
-  `trip_places`: name, city, country, kind (restaurant / hotel / sight /
-  bar / shop), a note, a would-return flag, optional link. Addable from a
-  trip, and browsable across all trips so "where did we eat in Lisbon" is
-  one search. This is the single most-requested thing and probably the most
-  used feature in the app once it exists.
 - **1.3 — Restaurant quick-add** *(S)*
-  Adding a place while standing outside it must take under ten seconds:
-  name, city prefilled from the trip, one tap for would-return. Everything
-  else optional and editable later.
+  Mostly landed with 1.2: name is the only required field, kind defaults to
+  restaurant, town prefills. What is left is the fast path — an add button
+  on the Places browser itself that asks which trip, so a place can be
+  recorded without navigating to the trip first.
 - **1.4 — Itineraries** *(M)* — *asked for explicitly*
   A trip in the future gets a day-by-day plan: date, entries with a time,
   place and note. The same trip becomes the journal afterwards, so planning
@@ -161,8 +156,9 @@ They are not a separate project.
 - **Tests.** Anything with real logic gets tests. 68 across 9 files today.
 - **Accessibility.** Not yet audited at all. Keyboard paths, focus order,
   labels, and screen-reader behaviour on the tree chart in particular.
-- **Performance.** The JS bundle is ~606 KB and everything is in one chunk.
-  Route-level code splitting is the obvious first move.
+- **Performance.** Route splitting done (main chunk 423 KB). Next: the
+  remaining 423 KB is React plus the Supabase client, so the wins now are
+  image handling for 1.6 and avoiding a fourth copy of the country list.
 
 ### Known open items
 
@@ -193,6 +189,29 @@ They are not a separate project.
 
 Shipped items move here with the date and a one-line note, so the report
 each morning has something to point at.
+
+### 2026-09-08
+
+- **1.2 Places and restaurants — shipped.** `trip_places` with name, town,
+  kind, note, link and a three-state would-return flag. A trip groups its
+  own places by kind, recommended first; `/places` searches across every
+  trip at once, folding accents so "cafe" finds Café Nicola and requiring
+  every word to match so "lisbon prawns" narrows to one. A place whose trip
+  was removed drops out rather than linking nowhere.
+- **Bundle split by route.** Main chunk 606 KB → 423 KB. A phone opening a
+  recipe no longer downloads the family-tree engine, the places browser, or
+  112 KB of document parsers behind the importer. Verified by clicking
+  through the real tab bar: one chunk on first load, one more per route.
+
+**Design note:** the would-return flag is deliberately three-state. NULL
+means nobody said, which is not "no" — defaulting an unanswered question to
+no would quietly libel every restaurant added in a hurry.
+
+**Confirmed, not assumed:** `saveChildren` tidies travellers with an
+unquoted PostgREST `in.()` list of UUIDs, which looked like the bug that
+once broke the passport sync on `GB-ENG`. It is fine — UUIDs contain no
+commas — and that was checked against the live API rather than reasoned
+about.
 
 ### 2026-09-07
 
