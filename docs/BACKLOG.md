@@ -153,7 +153,7 @@ They are not a separate project.
   Contrast, touch targets, empty states, error states, loading states.
 - **Cleanup.** Dead code, duplicated logic, hard-coded values that should be
   tokens, files that no longer earn their place.
-- **Tests.** Anything with real logic gets tests. 68 across 9 files today.
+- **Tests.** Anything with real logic gets tests. 99 across 11 files today.
 - **Accessibility.** Not yet audited at all. Keyboard paths, focus order,
   labels, and screen-reader behaviour on the tree chart in particular.
 - **Performance.** Route splitting done (main chunk 423 KB). Next: the
