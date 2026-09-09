@@ -29,8 +29,13 @@ const CHIP_OFF =
  * years later by somebody going back, who does not remember which trip it was.
  */
 export default function Places() {
-  const { places, loading, error, reload } = useTripPlaces();
-  const { trips } = useTrips();
+  const { places, loading: placesLoading, error, reload } = useTripPlaces();
+  // This page needs both: places carry the content, trips supply the titles a
+  // place is filtered and labelled by. Reporting "no places yet" while either
+  // is still in flight is a confident wrong answer -- and on a phone on hotel
+  // wifi it is the only answer anybody sees.
+  const { trips, loading: tripsLoading } = useTrips();
+  const loading = placesLoading || tripsLoading;
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<string | null>(null);
   const [onlyReturns, setOnlyReturns] = useState(false);
@@ -159,14 +164,17 @@ export default function Places() {
           className={cn(CHIP_BASE, kind === null ? CHIP_ON : CHIP_OFF)}
         >
           All
-          <span
-            className={cn(
-              "rounded-full px-1.5 text-[11px] tabular-nums",
-              kind === null ? "bg-white/25 text-white" : "bg-paper-warm text-ink-faint"
-            )}
-          >
-            {visible.length}
-          </span>
+          {/* No count until both sources are in, or it reads "0" mid-load. */}
+          {!loading && (
+            <span
+              className={cn(
+                "rounded-full px-1.5 text-[11px] tabular-nums",
+                kind === null ? "bg-white/25 text-white" : "bg-paper-warm text-ink-faint"
+              )}
+            >
+              {visible.length}
+            </span>
+          )}
         </button>
         {PLACE_KINDS.filter((k) => (counts.get(k) ?? 0) > 0).map((k) => (
           <button

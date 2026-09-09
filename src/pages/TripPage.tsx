@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { TripForm } from "@/components/TripForm";
 import { PlaceForm } from "@/components/PlaceForm";
 import { PlaceCard } from "@/components/PlaceCard";
+import { Itinerary } from "@/components/Itinerary";
+import { useItinerary } from "@/hooks/useItinerary";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrips } from "@/hooks/useTrips";
 import { useTripPlaces, type TripPlace } from "@/hooks/useTripPlaces";
@@ -21,7 +23,13 @@ export default function TripPage() {
   const navigate = useNavigate();
   const { isFamily } = useAuth();
   const { trips, loading, updateTrip, deleteTrip } = useTrips();
-  const { places, addPlace, updatePlace, removePlace } = useTripPlaces();
+  const {
+    places,
+    loading: placesLoading,
+    addPlace,
+    updatePlace,
+    removePlace,
+  } = useTripPlaces();
   const { data: passport } = usePassport();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -32,11 +40,23 @@ export default function TripPage() {
   const trip = trips?.find((t) => t.id === id) ?? null;
   const members = passport?.members ?? [];
 
-  const groups = useMemo(() => {
-    const mine = (places ?? []).filter((p) => p.trip_id === id);
-    return groupByKind([...mine].sort(byRecommendation));
-  }, [places, id]);
-  const placeCount = (places ?? []).filter((p) => p.trip_id === id).length;
+  const {
+    entries,
+    loading: itineraryLoading,
+    addEntry,
+    updateEntry,
+    removeEntry,
+  } = useItinerary(id);
+
+  const mine = useMemo(
+    () => (places ?? []).filter((p) => p.trip_id === id),
+    [places, id]
+  );
+  const groups = useMemo(
+    () => groupByKind([...mine].sort(byRecommendation)),
+    [mine]
+  );
+  const placeCount = mine.length;
 
   if (loading) {
     return <p className="mt-10 text-center text-ink-soft">Loading…</p>;
@@ -149,6 +169,32 @@ export default function TripPage() {
           )}
 
           <section className="mt-7">
+            {/* Before the trip these are the plan, afterwards the diary — the
+                same rows either way, which is the point of keeping them here
+                rather than in a planning app that forgets them. */}
+            <h2 className="mb-3 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+              {isUpcoming(trip) ? "The plan" : "Day by day"}
+              {entries && entries.length > 0 && (
+                <span className="rounded-full bg-paper-warm px-1.5 text-[11px] tabular-nums text-ink-faint">
+                  {entries.length}
+                </span>
+              )}
+            </h2>
+            <Itinerary
+              entries={entries ?? []}
+              loading={itineraryLoading}
+              places={mine}
+              startDate={trip.start_date}
+              endDate={trip.end_date}
+              upcoming={isUpcoming(trip)}
+              isFamily={isFamily}
+              onAdd={addEntry}
+              onUpdate={updateEntry}
+              onRemove={removeEntry}
+            />
+          </section>
+
+          <section className="mt-7">
             <h2 className="mb-3 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
               Places
               {placeCount > 0 && (
@@ -173,7 +219,12 @@ export default function TripPage() {
               </Card>
             )}
 
-            {groups.length === 0 && !addingPlace ? (
+            {/* The trip and its places load separately, so this section can be
+                rendered before the places arrive. Saying "none yet" then is a
+                confident wrong answer. */}
+            {placesLoading ? (
+              <p className="py-6 text-center text-ink-soft">Loading places…</p>
+            ) : groups.length === 0 && !addingPlace ? (
               <div className="rounded-2xl border border-dashed border-paper-line bg-paper-card/60 px-6 py-8 text-center">
                 <MapPin className="mx-auto h-5 w-5 text-accent/40" />
                 <p className="mt-2 font-serif italic text-ink-soft">
