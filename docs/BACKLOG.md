@@ -62,10 +62,6 @@ restaurants and itineraries below have somewhere to live.
   restaurant, town prefills. What is left is the fast path — an add button
   on the Places browser itself that asks which trip, so a place can be
   recorded without navigating to the trip first.
-- **1.4 — Itineraries** *(M)* — *asked for explicitly*
-  A trip in the future gets a day-by-day plan: date, entries with a time,
-  place and note. The same trip becomes the journal afterwards, so planning
-  and remembering are one record rather than two apps.
 - **1.5 — Packing lists** *(S)*
   Reusable templates ("beach", "ski", "long-haul with a toddler"),
   checkable, reset per trip. Small, and genuinely used with young children.
@@ -153,7 +149,7 @@ They are not a separate project.
   Contrast, touch targets, empty states, error states, loading states.
 - **Cleanup.** Dead code, duplicated logic, hard-coded values that should be
   tokens, files that no longer earn their place.
-- **Tests.** Anything with real logic gets tests. 99 across 11 files today.
+- **Tests.** Anything with real logic gets tests. 118 across 12 files today.
 - **Accessibility.** Not yet audited at all. Keyboard paths, focus order,
   labels, and screen-reader behaviour on the tree chart in particular.
 - **Performance.** Route splitting done (main chunk 423 KB). Next: the
@@ -189,6 +185,37 @@ They are not a separate project.
 
 Shipped items move here with the date and a one-line note, so the report
 each morning has something to point at.
+
+### 2026-09-09
+
+- **1.4 Itineraries — shipped.** `trip_days`: a date, an optional free-text
+  "when", a line about what happens, a note, and an optional link to a place
+  already saved. The heading reads "The plan" while a trip is ahead and "Day
+  by day" once it is behind — the same rows either way, which is the reason
+  this lives here instead of in a planning app that forgets.
+- **Two loading-state bugs fixed.** Both Places views have two data sources
+  and gated their empty state on one, so a trip page said "No places noted
+  yet" while places were in flight, and the browser said "No places yet"
+  whenever trips resolved second. Reproduced with a deliberately slowed mock
+  before fixing, and re-verified after.
+
+**Corrected while building:** 1.4 said to lay out every day of a trip. Built
+that, looked at a 13-day trip with three days written up, and found eleven
+lines saying "Nothing planned" — the clutter the module's own comment warned
+against. Empty days are an affordance while planning and noise afterwards,
+so past trips now show only days somebody wrote on, with a "show the other N
+days" link for family writing one up late. Day numbering still counts from
+the real start, so a diary entry is Day 4 even when days 1–3 are hidden.
+
+**Learned, for whoever builds next:** `at` is free text rather than a time
+column, because "morning" and "after nap" are what people write and neither
+parses; ordering uses an explicit `position`. And `place_id` is ON DELETE SET
+NULL, not cascade — removing a restaurant should not delete the plan that
+mentioned it.
+
+**Environment note:** `pkill -f "vite preview"` and `pgrep -f "vite preview"`
+both match the running shell's own command line and kill it. Use a bracket
+pattern (`[v]ite`) or the harness's background-task tooling.
 
 ### 2026-09-08
 
