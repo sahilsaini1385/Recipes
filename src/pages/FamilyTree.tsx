@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { TreeDeciduous, Heart, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { TreeDeciduous, Heart, Plus, Pencil, Trash2, X, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -17,6 +18,10 @@ import {
   layoutChart,
   type PlacedCard,
 } from "@/lib/treeLayout";
+import {
+  useRecipeAttribution,
+  useRecipeCredits,
+} from "@/hooks/useRecipeAttribution";
 import { firstName, initials } from "@/lib/names";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +99,9 @@ export default function FamilyTree() {
   const [panel, setPanel] = useState<PanelState>({ view: "actions" });
   const [addingRoot, setAddingRoot] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
+
+  // How many recipes each person is credited with, so a card can offer them.
+  const { byPerson: recipesByPerson } = useRecipeAttribution(useRecipeCredits());
 
   const chart = useMemo(
     () => (roots && roots.length > 0 ? layoutChart(roots) : null),
@@ -394,6 +402,26 @@ export default function FamilyTree() {
                 <X className="h-4 w-4" />
               </button>
             </div>
+
+            {/* A card is a couple, and the recipes may be credited to either
+                half of it, so this counts the pair — which is also how the
+                Recipes tab will filter when the link is followed. */}
+            {panel.view === "actions" &&
+              (() => {
+                const cooked = recipesByPerson.get(selected.id);
+                if (!cooked) return null;
+                return (
+                  <Link
+                    to={`/?from=${selected.id}`}
+                    className="mb-3 flex items-center gap-1.5 text-sm text-accent-dark hover:underline"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    {cooked.recipes.length}{" "}
+                    {cooked.recipes.length === 1 ? "recipe" : "recipes"} in the
+                    collection
+                  </Link>
+                );
+              })()}
 
             {panel.view === "actions" && !isFamily && (
               <p className="text-sm text-ink-soft">

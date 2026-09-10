@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ChefHat, Pencil, ExternalLink } from "lucide-react";
+import { BookOpen, ChefHat, Pencil, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ServingsControl } from "@/components/ServingsControl";
@@ -10,14 +10,17 @@ import { CookMode } from "@/components/CookMode";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useAuth } from "@/hooks/useAuth";
 import { useUnitSystem } from "@/hooks/useUnitSystem";
+import { useRecipeAttribution } from "@/hooks/useRecipeAttribution";
 import { photoUrl } from "@/lib/supabase";
 import { scaleFactor } from "@/lib/scaling";
 import { convertTemperatures } from "@/lib/units";
 import { formatCostPerServing } from "@/lib/cost";
+import { firstName } from "@/lib/names";
 
 export default function RecipePage() {
   const { slug } = useParams();
   const { recipes, loading } = useRecipes();
+  const { matchesFor } = useRecipeAttribution(recipes);
   const { isFamily } = useAuth();
 
   const recipe = useMemo(
@@ -57,6 +60,7 @@ export default function RecipePage() {
   const currentServings = servings ?? recipe.base_servings;
   const factor = scaleFactor(currentServings, recipe.base_servings);
   const photo = photoUrl(recipe.photo_path);
+  const creditedTo = matchesFor(recipe.credit ?? null);
 
   if (cooking) {
     return (
@@ -90,6 +94,23 @@ export default function RecipePage() {
           {recipe.credit && (
             <p className="mt-1 font-serif italic text-ink-soft">
               From {recipe.credit}
+            </p>
+          )}
+          {/* When the credit names somebody on the family tree, offer the
+              rest of what they cooked. Most credits are cookbooks and
+              websites, so this is quiet and often absent. */}
+          {creditedTo.length > 0 && (
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {creditedTo.map((m) => (
+                <Link
+                  key={m.personId}
+                  to={`/?from=${m.personId}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-paper-line bg-paper-card px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.1em] text-accent-dark hover:border-accent/40"
+                >
+                  <BookOpen className="h-3 w-3" />
+                  More from {firstName(m.name)}
+                </Link>
+              ))}
             </p>
           )}
         </div>

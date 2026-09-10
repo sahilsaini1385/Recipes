@@ -52,6 +52,12 @@ part anybody would actually want to read in twenty years.
 A trip is the container the app is missing, and it is what makes the
 restaurants and itineraries below have somewhere to live.
 
+> **Status check, 2026-09-10.** Three builds in, the tables hold 1 trip, 0
+> places and 0 itinerary entries. The theme is still the right one, but more
+> of it is worth building only once a real trip is in there — otherwise it is
+> features for an empty room. Prefer work against data the family already has
+> until that changes.
+>
 > Design constraint that applies to this whole theme: the Google Sheet stays
 > the source of truth for the passport counts. Trips are **additive** — they
 > may reference the same country codes, but `passport-sync` must keep working
@@ -116,10 +122,6 @@ you read.
 - **3.4 — Recipe photos from the family** *(S)*
   Storage and policies are already in place and unused. Let people add a
   photo of the finished dish from their phone.
-- **3.5 — Where a recipe came from** *(S)*
-  Recipes have a `credit` field, already populated ("From Nancy Jungman").
-  Link it to the person in the family tree, so a person's page can show the
-  recipes that came from them. Genuinely lovely, and nearly free.
 - **3.6 — Print view** *(S)*
   One clean page, scaled to the chosen servings, no navigation. People do
   print recipes.
@@ -149,10 +151,10 @@ They are not a separate project.
   Contrast, touch targets, empty states, error states, loading states.
 - **Cleanup.** Dead code, duplicated logic, hard-coded values that should be
   tokens, files that no longer earn their place.
-- **Tests.** Anything with real logic gets tests. 118 across 12 files today.
+- **Tests.** Anything with real logic gets tests. 141 across 13 files today.
 - **Accessibility.** Not yet audited at all. Keyboard paths, focus order,
   labels, and screen-reader behaviour on the tree chart in particular.
-- **Performance.** Route splitting done (main chunk 423 KB). Next: the
+- **Performance.** Route splitting done (main chunk 427 KB). Next: the
   remaining 423 KB is React plus the Supabase client, so the wins now are
   image handling for 1.6 and avoiding a fourth copy of the country list.
 
@@ -185,6 +187,52 @@ They are not a separate project.
 
 Shipped items move here with the date and a one-line note, so the report
 each morning has something to point at.
+
+### 2026-09-10
+
+- **3.5 Where a recipe came from — shipped.** The `credit` field is now
+  matched against the family tree, both ways: a recipe page offers "More from
+  Nancy", a tree card says how many recipes that couple is credited with, and
+  the Recipes tab takes a `?from=<person>` scope with a banner and a Clear
+  button. **65 of the 125 credited recipes link** — Nancy Jungman 48, John
+  Jungman 19, Will Jungman 1. The other 60 name cookbooks, websites and
+  friends, and are left as plain text.
+- **Category chips count inside the scope.** They were counting the whole
+  collection while showing one person's, so "All 6" sat above a single card.
+
+**Why this and not Theme 1.** Three builds went top-down through Trips. The
+database says the family has entered **1 trip, 0 places and 0 itinerary
+entries** in that time, against **178 recipes and 38 people on the tree**.
+Building Theme 1 item four would have been dressing an empty room. This build
+went where the data already is. Theme 1 is still right — it just needs a real
+trip in it before more of it is worth building.
+
+**The hard part was refusing to guess.** Attributing Grandma's cornbread to
+the wrong grandfather is a real harm in a family archive; leaving a credit as
+plain text costs nothing. So the matcher declines whenever more than one
+person could be meant. It will not choose between the tree's two Frank
+Jungmans, will not match a bare "Kathryn" (there are two), keeps the three
+different Nancys apart, and does not connect "Karina Valencia" to the tree's
+Karina Litwack or "Kathryn Jungman" to Kathryn Saini — the tree holds no
+maiden names, so the app has no basis for it. 23 tests, every credit string
+in them taken from the real table.
+
+**Learned, for whoever builds next:** spouses are a *field*, not a row.
+`spouse_name` on John's row is how Nancy — who has more recipes than anyone —
+exists in the tree at all, so a join on `tree_members.name` alone would have
+missed the single biggest contributor in the archive. A tree row is therefore
+a couple, which is why `groupByPerson` returns a list of `names` rather than
+one: a bucket showing 67 recipes has to say "John Jungman & Nancy Jungman"
+and not quietly credit him with her cooking.
+
+**Two dead ends caught by looking at screenshots**, not at test output: an
+unrecognised `?from=` showed an empty state saying "clear the filter" with no
+control to clear it, and eleven category chips reading 0 buried the one chip
+that had anything in it.
+
+**Also:** the whole recipe collection is 294 KB and the credits alone are
+5 KB, so the tree page fetches only `credit` rather than pulling the
+collection for a count.
 
 ### 2026-09-09
 

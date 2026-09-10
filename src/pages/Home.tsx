@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
-import { Search, Heart } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Search, Heart, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { RecipeCard } from "@/components/RecipeCard";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useCostEstimates } from "@/hooks/useCostEstimates";
+import { useRecipeAttribution } from "@/hooks/useRecipeAttribution";
 import { CATEGORIES } from "@/lib/categories";
 import { cn } from "@/lib/utils";
 import type { Recipe } from "@/lib/types";
@@ -41,31 +43,60 @@ export default function Home() {
   const [category, setCategory] = useState<string | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
+  // "Everything from Nancy" lives in the URL rather than in state, so the
+  // link from a recipe page and the link from the family tree are the same
+  // link, and it can be sent to somebody.
+  const [params, setParams] = useSearchParams();
+  const from = params.get("from");
+  const { byPerson, ready: attributionReady } = useRecipeAttribution(recipes);
+  const fromPerson = from ? byPerson.get(from) ?? null : null;
+  const clearFrom = () => {
+    const next = new URLSearchParams(params);
+    next.delete("from");
+    setParams(next, { replace: true });
+  };
+
+  // "Everything from Nancy" is a scope, not another chip: the chips count
+  // and filter inside it, so tapping Desserts while looking at her recipes
+  // says how many of *hers* are desserts rather than how many exist.
+  const scoped = useMemo(() => {
+    const all = recipes ?? [];
+    if (!from) return all;
+    const ids = new Set((fromPerson?.recipes ?? []).map((r) => r.id));
+    return all.filter((r) => ids.has(r.id));
+  }, [recipes, from, fromPerson]);
+
   const counts = useMemo(() => {
     const map = new Map<string, number>();
-    for (const r of recipes ?? []) {
+    for (const r of scoped) {
       map.set(r.category, (map.get(r.category) ?? 0) + 1);
     }
     return map;
-  }, [recipes]);
+  }, [scoped]);
 
   const favoriteCount = useMemo(
-    () => (recipes ?? []).filter((r) => favorites.has(r.id)).length,
-    [recipes, favorites]
+    () => scoped.filter((r) => favorites.has(r.id)).length,
+    [scoped, favorites]
   );
 
   const filtered = useMemo(() => {
-    let list = recipes ?? [];
+    let list = scoped;
     if (favoritesOnly) list = list.filter((r) => favorites.has(r.id));
     if (category) list = list.filter((r) => r.category === category);
     if (query.trim()) list = list.filter((r) => matchesQuery(r, query.trim()));
     return list;
-  }, [recipes, category, favoritesOnly, query, favorites]);
+  }, [scoped, category, favoritesOnly, query, favorites]);
 
   // What to say when nothing shows, phrased for the filter you actually used
   // — telling someone to "try another search" when they only tapped
   // Favorites is no help at all.
   const empty = useMemo(() => {
+    if (from && !fromPerson) {
+      return {
+        headline: "Nothing here came from them.",
+        hint: "Clear the filter to see every recipe",
+      };
+    }
     if (recipes && recipes.length === 0) {
       return {
         headline: "No recipes yet.",
@@ -91,10 +122,36 @@ export default function Home() {
       };
     }
     return { headline: "No recipes match.", hint: "Try clearing the filters" };
-  }, [recipes, favoritesOnly, favoriteCount, query, category]);
+  }, [recipes, from, fromPerson, favoritesOnly, favoriteCount, query, category]);
+
+  // The tree loads separately from the recipes, so a ?from= link that shows
+  // its empty state before attribution has arrived would flash "nothing came
+  // from them" at somebody who has recipes. Wait for both.
+  const busy = loading || (from !== null && !attributionReady);
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16 pt-5">
+      {/* Shown for any ?from=, including one that matches nobody: the Clear
+          button is the only way back out, and an empty state telling you to
+          clear a filter with no control to clear it is a dead end. */}
+      {from && !busy && (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-accent-soft px-4 py-3">
+          <p className="font-serif italic leading-snug text-accent-dark">
+            {fromPerson
+              ? `${fromPerson.recipes.length} ${
+                  fromPerson.recipes.length === 1 ? "recipe" : "recipes"
+                } from ${fromPerson.names.join(" & ")}`
+              : "Showing one person's recipes"}
+          </p>
+          <button
+            onClick={clearFrom}
+            className="flex h-9 shrink-0 items-center gap-1 rounded-full border border-accent/25 bg-paper-card px-3 text-[11px] font-medium uppercase tracking-[0.1em] text-accent-dark hover:border-accent/50"
+          >
+            <X className="h-3 w-3" />
+            Clear
+          </button>
+        </div>
+      )}
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
         <Input
@@ -132,11 +189,16 @@ export default function Home() {
         </button>
         <CategoryChip
           label="All"
-          count={recipes?.length ?? 0}
+          count={scoped.length}
           active={category === null}
           onClick={() => setCategory(null)}
         />
-        {CATEGORIES.map((c) => (
+        {CATEGORIES.filter(
+          // Unfiltered, an empty category still says something — nobody has
+          // added a soup yet. Inside one person's recipes it says nothing,
+          // and eleven chips reading 0 bury the one that has anything in it.
+          (c) => !from || category === c || (counts.get(c) ?? 0) > 0
+        ).map((c) => (
           <CategoryChip
             key={c}
             label={c}
@@ -147,7 +209,7 @@ export default function Home() {
         ))}
       </div>
 
-      {loading && (
+      {busy && (
         <p className="mt-10 text-center text-ink-soft">Loading recipes…</p>
       )}
       {error && (
