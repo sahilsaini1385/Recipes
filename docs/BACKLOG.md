@@ -194,9 +194,10 @@ each morning has something to point at.
   matched against the family tree, both ways: a recipe page offers "More from
   Nancy", a tree card says how many recipes that couple is credited with, and
   the Recipes tab takes a `?from=<person>` scope with a banner and a Clear
-  button. **65 of the 125 credited recipes link** — Nancy Jungman 48, John
-  Jungman 19, Will Jungman 1. The other 60 name cookbooks, websites and
-  friends, and are left as plain text.
+  button. **65 of the 125 credited recipes link** — 67 sit on John and Nancy's
+  row (Nancy 48, John 19, three credited to both) and one on Will's. The other
+  60 name cookbooks, websites and friends, and are left as plain text.
+  Measured by running the shipped matcher over the live table, not estimated.
 - **Category chips count inside the scope.** They were counting the whole
   collection while showing one person's, so "All 6" sat above a single card.
 
