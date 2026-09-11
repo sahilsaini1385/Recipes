@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Plus, LogOut, LogIn } from "lucide-react";
+import { Plus, LogOut, LogIn, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { sectionFor } from "@/components/BottomNav";
 import { useAuth } from "@/hooks/useAuth";
@@ -53,6 +53,23 @@ export function Header() {
           </nav>
         </div>
         <div className="flex items-center gap-1">
+          {/* Reading is open to everyone, so the list is too — you do not
+              need an account to be the one going to the shop. */}
+          {section === "/" && (
+            <Link
+              to="/shopping"
+              aria-label="Shopping list"
+              aria-current={pathname === "/shopping" ? "page" : undefined}
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                pathname === "/shopping"
+                  ? "bg-accent/10 text-accent-dark"
+                  : "text-ink-soft hover:bg-paper-warm hover:text-ink"
+              )}
+            >
+              <ShoppingCart className="h-[18px] w-[18px]" />
+            </Link>
+          )}
           {isFamily && section === "/" && (
             <Button size="sm" onClick={() => navigate("/add")}>
               <Plus className="h-4 w-4" />

@@ -16,7 +16,6 @@ const VOLUME_ML: Record<string, number> = {
   tbsp: 15,
   tbs: 15,
   tb: 15,
-  t: 15, // capital T convention is tablespoon, but lowercased here; rare
   teaspoon: 5,
   teaspoons: 5,
   tsp: 5,
@@ -42,8 +41,21 @@ const WEIGHT_G: Record<string, number> = {
   oz: 28.35,
 };
 
-function normalizeUnit(unit: string): string {
-  return unit.toLowerCase().replace(/\./g, "").trim();
+/**
+ * Fold a written unit to a lookup key.
+ *
+ * On a handwritten recipe card "T" is a tablespoon and "t" is a teaspoon, and
+ * this collection uses both: 70 lines say T, 91 say t. Lowercasing them
+ * together — which this did until it was measured — serves three times the
+ * salt, and "0.25 t Tabasco" becomes four times the Tabasco. Only the bare
+ * letter carries that meaning; "Tbsp" and "tsp" say which they are, so
+ * everything else folds to lower case as before.
+ */
+export function normalizeUnit(unit: string): string {
+  const bare = unit.replace(/\./g, "").trim();
+  if (bare === "T") return "tablespoon";
+  if (bare === "t") return "teaspoon";
+  return bare.toLowerCase();
 }
 
 function roundCookbook(value: number): number {
@@ -71,6 +83,17 @@ export function toMetric(quantity: number, unit: string): MetricAmount | null {
     return { value: roundCookbook(g), unit: "g" };
   }
   return null;
+}
+
+/**
+ * Roughly how big one of a unit is, for putting amounts in a sensible order
+ * ("1 cup + 5 tablespoons", not the other way round). Volumes and weights are
+ * ranked separately and never compared with each other — this is for display
+ * order only, and converts nothing.
+ */
+export function unitMagnitude(unit: string): number | null {
+  const key = normalizeUnit(unit);
+  return VOLUME_ML[key] ?? WEIGHT_G[key] ?? null;
 }
 
 export function isConvertibleUnit(unit: string | null): boolean {

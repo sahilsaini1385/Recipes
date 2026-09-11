@@ -108,11 +108,6 @@ becoming a calendar app.
 The strongest section. These make it a kitchen tool rather than an archive
 you read.
 
-- **3.1 — Shopping list from recipes** *(M)*
-  Tick several recipes, get one combined list, quantities summed where the
-  units agree and listed separately where they do not. Grouped roughly by
-  aisle. The ingredient parser and unit code needed for this already exist
-  and are well tested.
 - **3.2 — Meal plan for the week** *(M)*
   Drag or tap recipes onto days. Feeds 3.1 directly.
 - **3.3 — "We cooked this"** *(S)*
@@ -151,10 +146,10 @@ They are not a separate project.
   Contrast, touch targets, empty states, error states, loading states.
 - **Cleanup.** Dead code, duplicated logic, hard-coded values that should be
   tokens, files that no longer earn their place.
-- **Tests.** Anything with real logic gets tests. 141 across 13 files today.
+- **Tests.** Anything with real logic gets tests. 177 across 14 files today.
 - **Accessibility.** Not yet audited at all. Keyboard paths, focus order,
   labels, and screen-reader behaviour on the tree chart in particular.
-- **Performance.** Route splitting done (main chunk 427 KB). Next: the
+- **Performance.** Route splitting done (main chunk 428 KB). Next: the
   remaining 423 KB is React plus the Supabase client, so the wins now are
   image handling for 1.6 and avoiding a fourth copy of the country list.
 
@@ -187,6 +182,60 @@ They are not a separate project.
 
 Shipped items move here with the date and a one-line note, so the report
 each morning has something to point at.
+
+### 2026-09-11
+
+- **A three-times error in every metric conversion — fixed.** On a
+  handwritten recipe card `T` is a tablespoon and `t` is a teaspoon. The
+  collection uses both — 70 lines say T, 91 say t — and `normalizeUnit`
+  lowercased them together, so **every teaspoon in 32 recipes was shown at
+  three times its real amount** in Metric. "0.25 t Tabasco" read as 5 ml
+  instead of 1 ml. The old code carried a comment calling the capital-T
+  convention "rare"; counting the table showed it is the second most common
+  unit in the archive. Only the bare letter is ambiguous, so only the bare
+  letter is now case-sensitive.
+- **3.1 Shopping list — shipped.** `/shopping`, reachable from the cart in
+  the header. Tick recipes, get one list grouped by aisle, tick items off as
+  you shop. The chosen recipes live in the URL so a list can be sent to
+  whoever is going, and the ticks live in `localStorage` so a phone locking
+  in a pocket does not lose what is already in the basket.
+
+**Amounts are added, never converted.** Butter across three recipes reads
+"1 cup + 5 tablespoons", not "1⅓ cups". The collection has 100 distinct unit
+strings for about 25 real units, and a conversion is a chance to be wrong
+about something the cook already wrote down correctly. Same reasoning stops a
+"can" merging with a "package": one jar when the recipe wants two is a
+failed dinner, and these are genuinely different things.
+
+**The aisle rules are ordered, and the order is the logic.** "garlic powder"
+has to be caught by Spices before Produce sees the word garlic; "cream of
+mushroom soup" by Pantry before Dairy sees cream; a jalapeño by Produce
+before Spices sees pepper. A sweep over all 741 distinct items is what found
+each of these — and found that a trailing `\b` in the produce pattern was
+quietly dropping every plural, so "blueberries" and "avocados" were landing
+in Everything else. Unclassified items fell from 114 to 59, and what remains
+is honestly miscellaneous: Cool Whip, velveeta, hickory wood pellets, and a
+Bic-type lighter.
+
+**Tap water is left off.** It is 18 lines in the collection and nobody buys
+it. Seltzer water, coconut water and ice stay.
+
+**Learned, for whoever builds next:** 52 item fields hold a comma list rather
+than one ingredient — "lemons, pineapple, sugar" is one row, but so is
+"salmon fillets, skin on". Splitting on the comma would wreck the second, so
+these go on the list verbatim. And 427 lines have no unit at all while some
+have no quantity either; an ingredient you cannot count is still one you have
+to buy, so they are listed with a blank amount rather than dropped.
+
+**Corrected while building:** the first UI put the recipe picker above the
+list. On a 390px phone it filled the screen and left room for three items of
+the thing you actually came for. It now folds away behind "Add another
+recipe" as soon as there is a list. Caught by looking at the screenshot.
+
+**Environment note:** `pkill -f "[m]ock.mjs"` still kills the shell — the
+bracket pattern protects the pkill's own process but not the parent shell,
+whose command line contains the unbracketed path. Find the PID by port
+(`ss -lptn 'sport = :54321'`) and kill that.
 
 ### 2026-09-10
 

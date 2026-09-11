@@ -31,6 +31,44 @@ describe("toMetric", () => {
   });
 });
 
+describe("the recipe-card T/t convention", () => {
+  /**
+   * The collection writes teaspoons as "t" on 91 lines and tablespoons as "T"
+   * on 70, the way they are written by hand. Folding the two together — which
+   * this code did until the table was counted — puts three times the salt in
+   * 32 recipes.
+   */
+  it("keeps a capital T a tablespoon and a small t a teaspoon", () => {
+    expect(toMetric(1, "T")).toEqual({ value: 15, unit: "ml" });
+    expect(toMetric(1, "t")).toEqual({ value: 5, unit: "ml" });
+    expect(toMetric(1, "T.")).toEqual({ value: 15, unit: "ml" });
+    expect(toMetric(1, "t.")).toEqual({ value: 5, unit: "ml" });
+  });
+
+  it("gets these real lines right", () => {
+    // "0.25 t Tabasco" was being served at four times the Tabasco.
+    expect(toMetric(0.25, "t")).toEqual({ value: 1, unit: "ml" });
+    expect(toMetric(0.5, "t.")).toEqual({ value: 3, unit: "ml" });
+    expect(toMetric(6, "T.")).toEqual({ value: 90, unit: "ml" });
+    expect(toMetric(2, "T")).toEqual({ value: 30, unit: "ml" });
+  });
+
+  it("leaves spelled-out abbreviations case-insensitive", () => {
+    // Only the bare letter is ambiguous. These say which they are, and the
+    // collection writes them in every case: Tbsp, Tbs, TBS, tbs, tsp, Tsp.
+    for (const u of ["Tbsp", "Tbs", "TBS", "tbs", "tbsp"]) {
+      expect(toMetric(1, u)).toEqual({ value: 15, unit: "ml" });
+    }
+    for (const u of ["tsp", "Tsp", "tsp.", "teaspoon", "Teaspoons"]) {
+      expect(toMetric(1, u)).toEqual({ value: 5, unit: "ml" });
+    }
+    // A cup is a cup either way — the collection writes c, C and c.
+    for (const u of ["c", "C", "c.", "cup", "Cups"]) {
+      expect(toMetric(1, u)).toEqual({ value: 240, unit: "ml" });
+    }
+  });
+});
+
 describe("formatMetric with scaled amounts", () => {
   it("composes with the serving scaler", () => {
     const ing = parseIngredientLine("1/2 c. heavy cream");

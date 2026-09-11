@@ -22,6 +22,7 @@ const FamilyTree = lazy(() => import("@/pages/FamilyTree"));
 const Trips = lazy(() => import("@/pages/Trips"));
 const TripPage = lazy(() => import("@/pages/TripPage"));
 const Places = lazy(() => import("@/pages/Places"));
+const Shopping = lazy(() => import("@/pages/Shopping"));
 
 function SetupNotice() {
   return (
@@ -57,7 +58,9 @@ export default function App() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    const section = pathname.startsWith("/passport")
+    const section = pathname.startsWith("/shopping")
+      ? "Shopping list"
+      : pathname.startsWith("/passport")
       ? "Passport"
       : pathname.startsWith("/tree")
         ? "Family Tree"
@@ -83,6 +86,7 @@ export default function App() {
           <Route path="/recipe/:slug" element={<RecipePage />} />
           <Route path="/add" element={<AddRecipe />} />
           <Route path="/edit/:slug" element={<EditRecipe />} />
+          <Route path="/shopping" element={<Shopping />} />
           <Route path="/trips" element={<Trips />} />
           <Route path="/trips/:id" element={<TripPage />} />
           <Route path="/places" element={<Places />} />
