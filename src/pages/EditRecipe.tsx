@@ -6,6 +6,7 @@ import {
   formToDraft,
   type RecipeFormValue,
 } from "@/components/RecipeForm";
+import { LoadError } from "@/components/LoadError";
 import { useAuth } from "@/hooks/useAuth";
 import { useRecipes } from "@/hooks/useRecipes";
 import { updateRecipe } from "@/lib/saveRecipe";
@@ -14,7 +15,7 @@ export default function EditRecipe() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { session, isFamily, loading: authLoading } = useAuth();
-  const { recipes, loading } = useRecipes();
+  const { recipes, loading, error: loadError, reload } = useRecipes();
 
   const recipe = useMemo(
     () => recipes?.find((r) => r.slug === slug) ?? null,
@@ -43,6 +44,11 @@ export default function EditRecipe() {
         </p>
       </main>
     );
+  }
+  // Same trap as the recipe page: an edit screen saying "not found" about a
+  // recipe that failed to fetch invites someone to re-add one they still have.
+  if (loadError) {
+    return <LoadError what="this recipe" error={loadError} onRetry={reload} />;
   }
   if (!recipe || !form) {
     return <p className="mt-10 text-center text-ink-soft">Recipe not found.</p>;

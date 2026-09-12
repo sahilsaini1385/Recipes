@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search, Heart, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { LoadError } from "@/components/LoadError";
 import { RecipeCard } from "@/components/RecipeCard";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -129,6 +130,16 @@ export default function Home() {
   // from them" at somebody who has recipes. Wait for both.
   const busy = loading || (from !== null && !attributionReady);
 
+  // Searching and filtering nothing is not a thing anyone wants to do, and
+  // a row of chips all reading 0 makes a failed load look like an empty shelf.
+  if (error) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 pb-16 pt-5">
+        <LoadError what="the recipes" error={error} onRetry={reload} />
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-4 pb-16 pt-5">
       {/* Shown for any ?from=, including one that matches nobody: the Clear
@@ -211,14 +222,6 @@ export default function Home() {
 
       {busy && (
         <p className="mt-10 text-center text-ink-soft">Loading recipes…</p>
-      )}
-      {error && (
-        <div className="mt-10 text-center">
-          <p className="text-red-700">Could not load recipes: {error}</p>
-          <button className="mt-2 text-accent underline" onClick={reload}>
-            Try again
-          </button>
-        </div>
       )}
       {!loading && !error && filtered.length === 0 && (
         <div className="mt-10 rounded-2xl border border-dashed border-paper-line bg-paper-card/60 px-6 py-10 text-center">

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Search, Check, X, Plus, ShoppingCart, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { LoadError } from "@/components/LoadError";
 import { useRecipes } from "@/hooks/useRecipes";
 import { buildShoppingList, countLines } from "@/lib/shopping";
 import { cn } from "@/lib/utils";
@@ -24,7 +25,7 @@ function loadTicked(): Set<string> {
 }
 
 export default function Shopping() {
-  const { recipes, loading } = useRecipes();
+  const { recipes, loading, error, reload } = useRecipes();
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [ticked, setTicked] = useState<Set<string>>(loadTicked);
@@ -94,6 +95,11 @@ export default function Shopping() {
   if (loading) {
     return <p className="mt-10 text-center text-ink-soft">Loading recipes…</p>;
   }
+  // Without this the page offers an empty picker and an encouraging empty
+  // state, as though the collection were simply empty.
+  if (error) {
+    return <LoadError what="the recipes" error={error} onRetry={reload} />;
+  }
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-24 pt-5">
@@ -127,7 +133,13 @@ export default function Shopping() {
             </span>
           ))}
           <button
-            onClick={() => setChosen([])}
+            onClick={() => {
+              // Ticks go too: a fresh trip that opens with half its items
+              // already crossed off is worse than no memory at all.
+              setChosen([]);
+              setTicked(new Set());
+              setPicking(false);
+            }}
             className="rounded-full px-2.5 py-1 text-xs font-medium uppercase tracking-[0.1em] text-ink-faint hover:text-ink"
           >
             Start over
@@ -161,7 +173,11 @@ export default function Shopping() {
       <div className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-paper-line bg-paper-card/60">
         {searchResults.length === 0 ? (
           <p className="px-4 py-6 text-center font-serif italic text-ink-soft">
-            Nothing matches “{query.trim()}”.
+            {/* Without the check this read `Nothing matches “”.` whenever the
+                collection came back empty. */}
+            {query.trim()
+              ? `Nothing matches “${query.trim()}”.`
+              : "No recipes to choose from yet."}
           </p>
         ) : (
           <ul>

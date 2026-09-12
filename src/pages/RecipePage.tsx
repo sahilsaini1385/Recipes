@@ -3,6 +3,8 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { BookOpen, ChefHat, Pencil, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { CookLog } from "@/components/CookLog";
+import { LoadError } from "@/components/LoadError";
 import { ServingsControl } from "@/components/ServingsControl";
 import { IngredientList } from "@/components/IngredientList";
 import { UnitToggle } from "@/components/UnitToggle";
@@ -19,7 +21,7 @@ import { firstName } from "@/lib/names";
 
 export default function RecipePage() {
   const { slug } = useParams();
-  const { recipes, loading } = useRecipes();
+  const { recipes, loading, error, reload } = useRecipes();
   const { matchesFor } = useRecipeAttribution(recipes);
   const { isFamily } = useAuth();
 
@@ -49,6 +51,11 @@ export default function RecipePage() {
   if (loading) {
     return <p className="mt-10 text-center text-ink-soft">Loading…</p>;
   }
+  // A failed read must never be reported as a missing recipe: the collection
+  // is the point of the site, and "not found" reads as "gone".
+  if (error) {
+    return <LoadError what="this recipe" error={error} onRetry={reload} />;
+  }
   if (!recipe) {
     return (
       <p className="mt-10 text-center text-ink-soft">
@@ -76,7 +83,10 @@ export default function RecipePage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-4">
+    // pb-40, not pb-24: the Cook mode bar is fixed 64px up from the bottom and
+    // is itself ~72px tall, so 96px of padding left the last thing on the page
+    // sitting underneath it. The cooking log made that visible.
+    <main className="mx-auto max-w-3xl px-4 pb-40 pt-4">
       {photo && (
         <div className="mb-4 rounded-2xl border border-paper-line bg-paper-card p-1.5 shadow-plate">
           <img
@@ -205,6 +215,8 @@ export default function RecipePage() {
           </p>
         </section>
       )}
+
+      <CookLog recipeId={recipe.id} />
 
       {/* Sits above the phone tab bar; flush with the bottom on larger screens. */}
       {/* Opaque, not frosted: at large serving counts the step text scrolls

@@ -110,10 +110,6 @@ you read.
 
 - **3.2 — Meal plan for the week** *(M)*
   Drag or tap recipes onto days. Feeds 3.1 directly.
-- **3.3 — "We cooked this"** *(S)*
-  A tap on a recipe logs who made it and when, with an optional note
-  ("halved the chilli, Jack ate it"). Over years this becomes the most
-  interesting data in the app and costs one tap to maintain.
 - **3.4 — Recipe photos from the family** *(S)*
   Storage and policies are already in place and unused. Let people add a
   photo of the finished dish from their phone.
@@ -146,10 +142,10 @@ They are not a separate project.
   Contrast, touch targets, empty states, error states, loading states.
 - **Cleanup.** Dead code, duplicated logic, hard-coded values that should be
   tokens, files that no longer earn their place.
-- **Tests.** Anything with real logic gets tests. 177 across 14 files today.
+- **Tests.** Anything with real logic gets tests. 196 across 15 files today.
 - **Accessibility.** Not yet audited at all. Keyboard paths, focus order,
   labels, and screen-reader behaviour on the tree chart in particular.
-- **Performance.** Route splitting done (main chunk 428 KB). Next: the
+- **Performance.** Route splitting done (main chunk 429 KB). Next: the
   remaining 423 KB is React plus the Supabase client, so the wins now are
   image handling for 1.6 and avoiding a fourth copy of the country list.
 
@@ -158,6 +154,16 @@ They are not a separate project.
 - Three orphan edge functions in Supabase — `super-processor`,
   `hyper-responder`, `dynamic-task`. Nothing calls them; they squat names.
 - Leaked-password protection is off (dashboard toggle, owner's action).
+- **Six of the seven allowlisted family members have never created an
+  account.** Every write feature — adding recipes, trips, places, cooking
+  entries — is invisible to them, and every one of the 178 recipes is
+  attributed to the single account that exists. This is the biggest limit on
+  the app right now and no amount of building fixes it.
+- `email_allowed` is callable anonymously, so anyone can test whether a given
+  address is on the family allowlist. The list itself is not readable
+  (verified). It is a deliberate trade-off — the sign-in page uses it to
+  offer registration — and closing it means moving the check server-side,
+  which touches sign-in. Awaiting a decision.
 - `scripts/seed.mjs`, `netlify.toml`, and the `playwright` dev dependency
   may all be removable — awaiting a decision.
 - The `finance` schema is exposed via a role-level setting rather than the
@@ -182,6 +188,50 @@ They are not a separate project.
 
 Shipped items move here with the date and a one-line note, so the report
 each morning has something to point at.
+
+### 2026-09-12
+
+- **Three pages stopped claiming data was missing when the read had failed.**
+  A recipe page told anyone on a patchy connection **"Recipe not found"** —
+  about a recipe sitting safely in the database. The edit screen said the
+  same, inviting somebody to re-add a recipe they still had, and the shopping
+  page offered an empty picker and a cheerful "tick a few recipes" as though
+  the collection were empty. All four reads now say *"Couldn't load this —
+  nothing has been lost"* with a Try again that recovers in place, verified by
+  bringing the backend back up mid-session and pressing it.
+- **3.3 "We cooked this" — shipped.** `recipe_cooks`: a date, optionally who
+  made it, optionally how it went. A recipe with history shows "Cooked 8
+  times · usually Nancy · last on 30 August"; a recipe without shows one
+  quiet button to family and nothing at all to anyone else.
+
+**`cooked_by` is free text, and that is the important decision.** Seven
+addresses are on the allowlist and **exactly one has ever created an
+account**, so keying the cook to the signed-in user would have written one
+name on every entry the family ever logged. It is not a `tree_members`
+reference either — the cook might be a friend, a child too young to be on the
+tree, or "all of us". The name chips under the field are learned from what has
+already been typed *here*, so the list gets shorter and better with use rather
+than offering all 38 people on the tree.
+
+**It refuses to guess a regular cook** until there are at least three entries
+and a clear majority. Below that, "usually Nancy" is just an accident of who
+logged first dressed up as insight.
+
+**Caught by looking at the screenshots, twice.** The summary line counted only
+the five entries on screen, so eight cooks read as "Cooked 5 times". And the
+add form opened underneath the fixed Cook mode bar — the recipe page's bottom
+padding had been 32px short of the bar's height all along, which nothing had
+made visible until this section became the last thing on the page.
+
+**Caught by a test I wrote:** `new Date(2026, 12, 45)` does not fail, it rolls
+forward to the following February. A malformed date would have rendered as a
+plausible wrong one, so `parseISODate` now checks the date round-trips.
+
+**Learned, for whoever builds next:** the mock now has an auth stub. POST to
+`/auth/v1/token` returns a session supabase-js will persist, and `is_family`
+returns true, so the family-only half of any feature can be driven in the
+browser. Sign in with `form button[type=submit]` — `getByRole('button', {name:
+/sign in/i})` matches the header's button first and silently does nothing.
 
 ### 2026-09-11
 
