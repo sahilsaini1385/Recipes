@@ -113,9 +113,6 @@ you read.
 - **3.4 — Recipe photos from the family** *(S)*
   Storage and policies are already in place and unused. Let people add a
   photo of the finished dish from their phone.
-- **3.6 — Print view** *(S)*
-  One clean page, scaled to the chosen servings, no navigation. People do
-  print recipes.
 
 ## Theme 4 — Stories
 
@@ -162,8 +159,9 @@ They are not a separate project.
 - `email_allowed` is callable anonymously, so anyone can test whether a given
   address is on the family allowlist. The list itself is not readable
   (verified). It is a deliberate trade-off — the sign-in page uses it to
-  offer registration — and closing it means moving the check server-side,
-  which touches sign-in. Awaiting a decision.
+  offer registration, and now to gate the emailed link too — and closing it
+  means moving the check server-side, which touches sign-in. Awaiting a
+  decision.
 - `scripts/seed.mjs`, `netlify.toml`, and the `playwright` dev dependency
   may all be removable — awaiting a decision.
 - The `finance` schema is exposed via a role-level setting rather than the
@@ -188,6 +186,44 @@ They are not a separate project.
 
 Shipped items move here with the date and a one-line note, so the report
 each morning has something to point at.
+
+### 2026-09-13
+
+- **The emailed sign-in link no longer lets strangers in.** `signInWithOtp`
+  creates an account for an unknown address by default — confirmed in
+  Supabase's own documentation — and this path never called `email_allowed`,
+  though the password path beside it always did. So **anyone at all could
+  create an account on the family's project, and make it send them mail**.
+  They could never write anything (`is_family()` gates every write policy on
+  the allowlist, checked), so this was unauthorised account creation and an
+  open mail relay rather than a data leak. Verified fixed by driving the page
+  with a non-allowlisted address and confirming **zero** requests reach the
+  OTP endpoint, where a family address still sends exactly one.
+- **The sign-in page now leads with the emailed link.** The password is still
+  there behind "I know the family password".
+- **3.6 Print view — shipped.** A "Print this recipe" link, and a print
+  stylesheet that strips the site down to the recipe.
+
+**Why the sign-in rework counts as the important half of today.** Six of the
+seven people on the allowlist have never made an account, and the thing in
+their way was a shared password somebody had to tell them. The emailed link
+needs nothing anyone has to remember and works the first time. This is the
+same finding as yesterday, acted on rather than reported again.
+
+**The printed page is the same DOM as the screen**, with the furniture hidden
+by `print:hidden` rather than a second rendering of the recipe. That means
+paper always matches what you were looking at — the servings you scaled to
+and the units you picked — with no separate code path to drift out of step.
+Verified at real A4 width, not just in a wide viewport.
+
+**Caught by looking at the output:** the site header printed above every
+recipe. The blanket rule that keeps fixed furniture off the page did not
+catch it, because the header is `sticky`, not `fixed`.
+
+**No new tests today, and that is worth stating plainly.** Everything shipped
+was CSS and a guard in front of a network call; the honest verification is
+the browser, and it is the browser that caught both faults. The count stays
+at 196.
 
 ### 2026-09-12
 

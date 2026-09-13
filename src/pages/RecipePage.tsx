@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { BookOpen, ChefHat, Pencil, ExternalLink } from "lucide-react";
+import { BookOpen, ChefHat, Pencil, Printer, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { CookLog } from "@/components/CookLog";
@@ -18,6 +18,7 @@ import { scaleFactor } from "@/lib/scaling";
 import { convertTemperatures } from "@/lib/units";
 import { formatCostPerServing } from "@/lib/cost";
 import { firstName } from "@/lib/names";
+import { cn } from "@/lib/utils";
 
 export default function RecipePage() {
   const { slug } = useParams();
@@ -88,7 +89,7 @@ export default function RecipePage() {
     // sitting underneath it. The cooking log made that visible.
     <main className="mx-auto max-w-3xl px-4 pb-40 pt-4">
       {photo && (
-        <div className="mb-4 rounded-2xl border border-paper-line bg-paper-card p-1.5 shadow-plate">
+        <div className="mb-4 rounded-2xl border border-paper-line bg-paper-card p-1.5 shadow-plate print:hidden">
           <img
             src={photo}
             alt={recipe.title}
@@ -110,7 +111,7 @@ export default function RecipePage() {
               rest of what they cooked. Most credits are cookbooks and
               websites, so this is quiet and often absent. */}
           {creditedTo.length > 0 && (
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 print:hidden">
               {creditedTo.map((m) => (
                 <Link
                   key={m.personId}
@@ -128,14 +129,14 @@ export default function RecipePage() {
           <Link
             to={`/edit/${recipe.slug}`}
             aria-label="Edit recipe"
-            className={buttonVariants({ variant: "outline", size: "icon" })}
+            className={cn(buttonVariants({ variant: "outline", size: "icon" }), "print:hidden")}
           >
             <Pencil className="h-4 w-4" />
           </Link>
         )}
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap gap-1.5 print:hidden">
         <Badge>{recipe.category}</Badge>
         {formatCostPerServing(recipe.cost_per_serving) && (
           <Badge
@@ -152,7 +153,7 @@ export default function RecipePage() {
           </Badge>
         ))}
       </div>
-      <div className="mt-4 h-px bg-gradient-to-r from-paper-line via-paper-line/50 to-transparent" />
+      <div className="mt-4 h-px bg-gradient-to-r from-paper-line via-paper-line/50 to-transparent print:hidden" />
       {recipe.source_url && (
         <a
           href={recipe.source_url}
@@ -164,7 +165,14 @@ export default function RecipePage() {
         </a>
       )}
 
-      <div className="mt-4">
+      {/* On paper the servings are a fact, not a control — but they have to
+          be stated, because the amounts below are scaled to them. */}
+      <p className="hidden print:mt-1 print:block">
+        Serves {currentServings}
+        {units === "metric" && " · metric"}
+      </p>
+
+      <div className="mt-4 print:hidden">
         <ServingsControl
           servings={currentServings}
           baseServings={recipe.base_servings}
@@ -178,7 +186,9 @@ export default function RecipePage() {
           <h2 className="flex flex-1 items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
             Ingredients
           </h2>
-          <UnitToggle value={units} onChange={setUnits} />
+          <div className="print:hidden">
+            <UnitToggle value={units} onChange={setUnits} />
+          </div>
         </div>
         <IngredientList
           ingredients={recipe.ingredients}
@@ -216,7 +226,24 @@ export default function RecipePage() {
         </section>
       )}
 
-      <CookLog recipeId={recipe.id} />
+      {/* The cooking history belongs to the archive, not to the counter. */}
+      <div className="print:hidden">
+        <CookLog recipeId={recipe.id} />
+      </div>
+
+      {/* Print only: where this came from, so a sheet found in a drawer in
+          ten years can be traced back to the recipe it was printed from. */}
+      <p className="mt-8 hidden border-t border-black/20 pt-2 text-xs print:block">
+        Jungman family recipes · {window.location.host}/recipe/{recipe.slug}
+      </p>
+
+      <button
+        onClick={() => window.print()}
+        className="mt-8 inline-flex items-center gap-1.5 text-sm text-accent underline print:hidden"
+      >
+        <Printer className="h-3.5 w-3.5" />
+        Print this recipe
+      </button>
 
       {/* Sits above the phone tab bar; flush with the bottom on larger screens. */}
       {/* Opaque, not frosted: at large serving counts the step text scrolls

@@ -47,3 +47,38 @@
     opacity: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Printing a recipe.
+
+   The printed page is the same DOM as the screen, with the furniture hidden
+   via `print:hidden` — not a second rendering of the recipe. That matters
+   because it means what you get on paper is exactly what you were looking at:
+   the servings you scaled to and the units you chose, with no separate code
+   path to drift out of step.
+   --------------------------------------------------------------------------- */
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  /* Paper is not a screen: full-bleed colour wastes ink and greys the text. */
+  body {
+    color: #000;
+  }
+  /* Keep an ingredient or a numbered step from being split across pages. */
+  li {
+    break-inside: avoid;
+  }
+  h1,
+  h2 {
+    break-after: avoid;
+  }
+  /* Anything fixed to the viewport tiles onto every sheet otherwise. */
+  .fixed {
+    display: none !important;
+  }
+}

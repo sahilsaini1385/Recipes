@@ -19,7 +19,10 @@ export function Header() {
   const section = sectionFor(pathname);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-paper-deep/70 bg-paper/90 backdrop-blur-md">
+    // print:hidden because this is sticky rather than fixed, so the blanket
+    // rule that keeps fixed furniture off the page does not catch it — the
+    // whole site nav was printing above every recipe.
+    <header className="sticky top-0 z-20 border-b border-paper-deep/70 bg-paper/90 backdrop-blur-md print:hidden">
       <div className="mx-auto flex h-16 max-w-3xl items-center justify-between gap-2 px-4">
         <div className="flex items-center gap-5">
           <Link to="/" className="flex items-center gap-2.5">
