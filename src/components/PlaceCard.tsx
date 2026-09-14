@@ -36,7 +36,7 @@ export function PlaceCard({
             {place.name}
             {place.would_return === true && (
               <ThumbsUp
-                className="ml-1.5 inline h-3.5 w-3.5 -translate-y-0.5 text-accent"
+                className="ml-1.5 inline h-3.5 w-3.5 -translate-y-0.5 text-accent-dark"
                 aria-label="Would go back"
               />
             )}
@@ -91,7 +91,7 @@ export function PlaceCard({
           rel="noreferrer noopener"
           className={cn(
             "mt-2 inline-flex items-center gap-1 text-sm text-accent-dark underline",
-            "hover:text-accent"
+            "hover:text-accent-dark"
           )}
         >
           <ExternalLink className="h-3.5 w-3.5" />

@@ -140,8 +140,15 @@ They are not a separate project.
 - **Cleanup.** Dead code, duplicated logic, hard-coded values that should be
   tokens, files that no longer earn their place.
 - **Tests.** Anything with real logic gets tests. 196 across 15 files today.
-- **Accessibility.** Not yet audited at all. Keyboard paths, focus order,
-  labels, and screen-reader behaviour on the tree chart in particular.
+- **Accessibility.** Audited with axe-core on 2026-09-14 across every page at
+  phone width. **Exactly one rule failed anywhere: colour contrast**, and it
+  was the same mistake repeated — `text-accent-dark/70` and `/80` on small
+  uppercase headings, and plain `text-accent` on links. Undiluted,
+  `accent-dark` measures 5.37–5.95 against every paper surface, so the fix
+  was to stop thinning it rather than to change any token. Nothing else
+  failed: no missing labels, no unlabelled controls, no heading-order or
+  landmark problems. Still unexamined: keyboard focus order and how the tree
+  chart reads to a screen reader — axe cannot judge either.
 - **Performance.** Route splitting done (main chunk 429 KB). Next: the
   remaining 423 KB is React plus the Supabase client, so the wins now are
   image handling for 1.6 and avoiding a fourth copy of the country list.
@@ -186,6 +193,45 @@ They are not a separate project.
 
 Shipped items move here with the date and a one-line note, so the report
 each morning has something to point at.
+
+### 2026-09-14
+
+- **Six recipes were pretending to be recipes.** The importer left shells
+  behind — three with no ingredients *and* no steps, three more missing one
+  or the other. One of them says so in its own notes: "Recipe content could
+  not be extracted from the source file." The page dressed them up anyway: a
+  servings control scaling nothing, a US/Metric toggle converting nothing,
+  empty Ingredients and Steps headings, a Cook mode button leading to a blank
+  full-screen view, and a Print link that produced an empty sheet. All of
+  that is now gated on there being something to show, and a shell says
+  plainly *"This one hasn't been written down yet"* with an Add the recipe
+  button for family. The shopping list names a ticked recipe that has no
+  ingredients instead of silently contributing nothing.
+- **The first accessibility audit.** axe-core, every page, phone width.
+- **`TripPage` said "Trip not found" on a failed read** — the same bug fixed
+  for recipes on the 12th, still live on trips.
+
+**The audit found exactly one rule failing, everywhere: colour contrast.** No
+missing labels, no unlabelled controls, no heading-order or landmark faults —
+which is a genuinely good result for a codebase that had never been checked.
+And the failures were all one mistake repeated: `text-accent-dark/70` and
+`/80` on the small uppercase section headings, and plain `text-accent` on
+links. The tab bar already carried a comment noting plain accent measures
+4.22:1 and is "just under the readability floor", so the decision had been
+made once and simply never applied anywhere else.
+
+**The fix changes no colour token.** Undiluted, `accent-dark` measures
+5.37–5.95 against every paper surface in the palette; the opacity modifiers
+were what pushed it to 3.23–4.22. So the fix was to stop thinning it.
+
+**What the audit cannot tell you**, and is therefore still open: keyboard
+focus order, and how the family tree chart reads to a screen reader.
+
+**Learned, for whoever builds next:** axe takes ~24s per page in this
+environment, mostly injecting its own 600 KB bundle. Sixteen page-runs blow
+any sensible timeout, so audit at one width, write each page's result to a
+file as it completes, and never pipe the run through `tail` — the buffering
+hides all progress and a hung page looks identical to a slow one.
 
 ### 2026-09-13
 

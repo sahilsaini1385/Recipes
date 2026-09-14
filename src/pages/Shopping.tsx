@@ -81,6 +81,10 @@ export default function Shopping() {
 
   const groups = useMemo(() => buildShoppingList(chosen), [chosen]);
   const total = countLines(groups);
+  // Six recipes in the collection have no ingredients — they came out of the
+  // importer as shells. Ticking one and watching nothing appear looks like
+  // the list is broken, so name them instead.
+  const contributeNothing = chosen.filter((r) => r.ingredients.length === 0);
   const tickedHere = groups
     .flatMap((g) => g.lines)
     .filter((l) => ticked.has(l.key)).length;
@@ -126,7 +130,7 @@ export default function Shopping() {
               <button
                 aria-label={`Remove ${r.title}`}
                 onClick={() => toggleRecipe(r.slug)}
-                className="flex h-6 w-6 items-center justify-center rounded-full text-accent-dark/70 hover:bg-white/60 hover:text-accent-dark"
+                className="flex h-6 w-6 items-center justify-center rounded-full text-accent-dark hover:bg-white/60 hover:text-accent-dark"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -145,6 +149,15 @@ export default function Shopping() {
             Start over
           </button>
         </div>
+      )}
+
+      {contributeNothing.length > 0 && (
+        <p className="mt-3 rounded-xl border border-dashed border-paper-line bg-paper-warm/60 px-3 py-2 text-sm text-ink-soft">
+          {contributeNothing.map((r) => r.title).join(", ")}{" "}
+          {contributeNothing.length === 1 ? "has" : "have"} no ingredients
+          written down yet, so nothing from{" "}
+          {contributeNothing.length === 1 ? "it" : "them"} is on the list.
+        </p>
       )}
 
       {/* ---- Picking recipes ---- */}
@@ -227,7 +240,7 @@ export default function Shopping() {
       {/* ---- The list ---- */}
       {chosen.length === 0 ? (
         <div className="mt-8 rounded-2xl border border-dashed border-paper-line bg-paper-card/60 px-6 py-12 text-center">
-          <ShoppingCart className="mx-auto h-8 w-8 text-accent/40" />
+          <ShoppingCart className="mx-auto h-8 w-8 text-accent-dark/40" />
           <p className="mt-3 font-serif italic text-ink-soft">
             Tick a few recipes and they become one list.
           </p>
@@ -239,7 +252,7 @@ export default function Shopping() {
         <div className="mt-6">
           {groups.map((group) => (
             <section key={group.aisle} className="mb-5">
-              <h2 className="mb-2 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+              <h2 className="mb-2 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark after:h-px after:flex-1 after:bg-paper-line">
                 {group.aisle}
               </h2>
               <ul className="space-y-0.5">

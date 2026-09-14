@@ -68,7 +68,9 @@ export function CookMode({
       </div>
 
       <div className="mx-auto max-w-2xl px-4 pb-24 pt-4">
-        <h2 className="mb-3 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+        {recipe.ingredients.length > 0 && (
+        <>
+        <h2 className="mb-3 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark after:h-px after:flex-1 after:bg-paper-line">
           Ingredients
         </h2>
         <ul className="space-y-1">
@@ -108,8 +110,12 @@ export function CookMode({
             </li>
           ))}
         </ul>
+        </>
+        )}
 
-        <h2 className="mb-3 mt-8 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+        {recipe.steps.length > 0 && (
+        <>
+        <h2 className="mb-3 mt-8 flex items-center gap-3 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark after:h-px after:flex-1 after:bg-paper-line">
           Steps
         </h2>
         <ol className="space-y-2">
@@ -143,12 +149,14 @@ export function CookMode({
             </li>
           ))}
         </ol>
+        </>
+        )}
 
         {/* The notes often hold the oven-temperature alternative or a timing
             tip — exactly what you need on the screen you cook from. */}
         {recipe.notes && (
           <section className="mt-8 rounded-xl border border-dashed border-paper-line bg-paper-warm/70 p-4">
-            <h2 className="mb-1.5 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80">
+            <h2 className="mb-1.5 font-sans text-[13px] font-semibold uppercase tracking-[0.16em] text-accent-dark">
               Notes
             </h2>
             <p className="whitespace-pre-wrap font-serif text-lg italic leading-relaxed text-ink-soft">

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, MapPin, Pencil, Plus, Trash2, Users, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { LoadError } from "@/components/LoadError";
 import { TripForm } from "@/components/TripForm";
 import { PlaceForm } from "@/components/PlaceForm";
 import { PlaceCard } from "@/components/PlaceCard";
@@ -22,7 +23,7 @@ export default function TripPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isFamily } = useAuth();
-  const { trips, loading, updateTrip, deleteTrip } = useTrips();
+  const { trips, loading, error, reload, updateTrip, deleteTrip } = useTrips();
   const {
     places,
     loading: placesLoading,
@@ -61,11 +62,16 @@ export default function TripPage() {
   if (loading) {
     return <p className="mt-10 text-center text-ink-soft">Loading…</p>;
   }
+  // The same trap the recipe pages had: a failed read is not a missing trip,
+  // and "not found" reads as "gone" about something the family wrote down.
+  if (error) {
+    return <LoadError what="this trip" error={error} onRetry={reload} />;
+  }
   if (!trip) {
     return (
       <p className="mt-10 text-center text-ink-soft">
         Trip not found.{" "}
-        <Link to="/trips" className="text-accent underline">
+        <Link to="/trips" className="text-accent-dark underline">
           Back to all trips
         </Link>
       </p>
@@ -119,7 +125,7 @@ export default function TripPage() {
 
           {trip.destinations.length > 0 && (
             <section className="mt-5">
-              <h2 className="mb-2 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+              <h2 className="mb-2 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark after:h-px after:flex-1 after:bg-paper-line">
                 Where
               </h2>
               <div className="flex flex-wrap gap-2">
@@ -150,7 +156,7 @@ export default function TripPage() {
           {who.length > 0 && (
             <section className="mt-5">
               {/* A trip that hasn't happened yet has nobody who "went". */}
-              <h2 className="mb-2 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+              <h2 className="mb-2 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark after:h-px after:flex-1 after:bg-paper-line">
                 {isUpcoming(trip) ? "Who's going" : "Who went"}
               </h2>
               <p className="flex items-center gap-1.5 text-ink-soft">
@@ -172,7 +178,7 @@ export default function TripPage() {
             {/* Before the trip these are the plan, afterwards the diary — the
                 same rows either way, which is the point of keeping them here
                 rather than in a planning app that forgets them. */}
-            <h2 className="mb-3 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+            <h2 className="mb-3 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark after:h-px after:flex-1 after:bg-paper-line">
               {isUpcoming(trip) ? "The plan" : "Day by day"}
               {entries && entries.length > 0 && (
                 <span className="rounded-full bg-paper-warm px-1.5 text-[11px] tabular-nums text-ink-faint">
@@ -195,7 +201,7 @@ export default function TripPage() {
           </section>
 
           <section className="mt-7">
-            <h2 className="mb-3 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+            <h2 className="mb-3 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark after:h-px after:flex-1 after:bg-paper-line">
               Places
               {placeCount > 0 && (
                 <span className="rounded-full bg-paper-warm px-1.5 text-[11px] tabular-nums text-ink-faint">
@@ -226,7 +232,7 @@ export default function TripPage() {
               <p className="py-6 text-center text-ink-soft">Loading places…</p>
             ) : groups.length === 0 && !addingPlace ? (
               <div className="rounded-2xl border border-dashed border-paper-line bg-paper-card/60 px-6 py-8 text-center">
-                <MapPin className="mx-auto h-5 w-5 text-accent/40" />
+                <MapPin className="mx-auto h-5 w-5 text-accent-dark/40" />
                 <p className="mt-2 font-serif italic text-ink-soft">
                   No places noted yet.
                 </p>

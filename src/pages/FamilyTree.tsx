@@ -561,7 +561,7 @@ function ChartCard({
         div.
       </span>
     ) : (
-      <Heart className="mt-4 h-3 w-3 shrink-0 fill-accent/80 text-accent/80" />
+      <Heart className="mt-4 h-3 w-3 shrink-0 fill-accent/80 text-accent-dark/80" />
     )
   ) : null;
   const spouseBadge = node.spouse_name ? (
@@ -603,7 +603,7 @@ function ChartCard({
             title={label}
             // Tight tracking so captions like "Marilyn & William's parents"
             // fit the fixed card width instead of ending in an ellipsis.
-            className="absolute inset-x-1.5 top-1.5 truncate text-center text-[8px] font-semibold uppercase tracking-[0.04em] text-accent-dark/70"
+            className="absolute inset-x-1.5 top-1.5 truncate text-center text-[8px] font-semibold uppercase tracking-[0.04em] text-accent-dark"
           >
             {label}
           </span>

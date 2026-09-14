@@ -31,7 +31,7 @@ export function Header() {
             </span>
             <span className="font-serif text-lg font-semibold leading-tight text-ink">
               Jungman Family
-              <span className="block text-xs font-normal uppercase tracking-widest text-accent">
+              <span className="block text-xs font-normal uppercase tracking-widest text-accent-dark">
                 {SECTION_LABELS[section]}
               </span>
             </span>

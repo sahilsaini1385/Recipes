@@ -145,7 +145,7 @@ export default function Places() {
           className={cn(CHIP_BASE, onlyReturns ? CHIP_ON : CHIP_OFF)}
         >
           <ThumbsUp
-            className={cn("h-4 w-4", onlyReturns ? "text-white" : "text-accent")}
+            className={cn("h-4 w-4", onlyReturns ? "text-white" : "text-accent-dark")}
           />
           Would go back
           {returnCount > 0 && (
@@ -201,7 +201,7 @@ export default function Places() {
       {error && (
         <div className="mt-10 text-center">
           <p className="text-red-700">Could not load places: {error}</p>
-          <button className="mt-2 text-accent underline" onClick={reload}>
+          <button className="mt-2 text-accent-dark underline" onClick={reload}>
             Try again
           </button>
         </div>
@@ -227,7 +227,7 @@ export default function Places() {
                 trip && (
                   <Link
                     to={`/trips/${trip.id}`}
-                    className="text-sm text-accent-dark underline hover:text-accent"
+                    className="text-sm text-accent-dark underline hover:text-accent-dark"
                   >
                     {trip.title}
                   </Link>

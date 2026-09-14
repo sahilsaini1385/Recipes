@@ -42,7 +42,7 @@ function SetupNotice() {
 function NotFound() {
   return (
     <main className="mx-auto max-w-md px-4 py-20 text-center">
-      <p className="font-serif text-5xl text-accent/40">?</p>
+      <p className="font-serif text-5xl text-accent-dark/40">?</p>
       <h1 className="mt-4 font-serif text-2xl">This page isn't here</h1>
       <p className="mt-2 text-ink-soft">
         The link may be old, or the recipe may have been renamed.

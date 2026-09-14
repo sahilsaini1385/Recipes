@@ -199,7 +199,7 @@ export function Itinerary({
     const datedButBlank = hiddenDays > 0;
     return (
       <div className="rounded-2xl border border-dashed border-paper-line bg-paper-card/60 px-6 py-8 text-center">
-        <CalendarDays className="mx-auto h-5 w-5 text-accent/40" />
+        <CalendarDays className="mx-auto h-5 w-5 text-accent-dark/40" />
         <p className="mt-2 font-serif italic text-ink-soft">
           {upcoming ? "Nothing planned yet." : "Nobody wrote this one up."}
         </p>

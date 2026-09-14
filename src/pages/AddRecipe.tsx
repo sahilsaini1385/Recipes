@@ -142,7 +142,7 @@ export default function AddRecipe() {
       <main className="mx-auto max-w-md px-4 py-16 text-center">
         <p className="text-ink-soft">
           Sign in to add recipes.{" "}
-          <Link to="/signin" className="text-accent underline">
+          <Link to="/signin" className="text-accent-dark underline">
             Sign in
           </Link>
         </p>

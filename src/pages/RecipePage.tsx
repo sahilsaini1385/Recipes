@@ -60,7 +60,7 @@ export default function RecipePage() {
   if (!recipe) {
     return (
       <p className="mt-10 text-center text-ink-soft">
-        Recipe not found. <Link to="/" className="text-accent underline">Back to all recipes</Link>
+        Recipe not found. <Link to="/" className="text-accent-dark underline">Back to all recipes</Link>
       </p>
     );
   }
@@ -69,6 +69,14 @@ export default function RecipePage() {
   const factor = scaleFactor(currentServings, recipe.base_servings);
   const photo = photoUrl(recipe.photo_path);
   const creditedTo = matchesFor(recipe.credit ?? null);
+  // Six recipes in the collection came out of the importer as shells — one
+  // says so in its own notes, "Recipe content could not be extracted". The
+  // page used to dress them up as real recipes: a servings control scaling
+  // nothing, a metric toggle converting nothing, empty Ingredients and Steps
+  // headings, and a Cook mode button leading to a blank screen.
+  const hasIngredients = recipe.ingredients.length > 0;
+  const hasSteps = recipe.steps.length > 0;
+  const isShell = !hasIngredients && !hasSteps;
 
   if (cooking) {
     return (
@@ -159,7 +167,7 @@ export default function RecipePage() {
           href={recipe.source_url}
           target="_blank"
           rel="noreferrer"
-          className="mt-2 inline-flex items-center gap-1 text-sm text-accent underline"
+          className="mt-2 inline-flex items-center gap-1 text-sm text-accent-dark underline"
         >
           Source <ExternalLink className="h-3 w-3" />
         </a>
@@ -167,11 +175,12 @@ export default function RecipePage() {
 
       {/* On paper the servings are a fact, not a control — but they have to
           be stated, because the amounts below are scaled to them. */}
-      <p className="hidden print:mt-1 print:block">
+      <p className={cn("hidden print:mt-1", hasIngredients && "print:block")}>
         Serves {currentServings}
         {units === "metric" && " · metric"}
       </p>
 
+      {hasIngredients && (
       <div className="mt-4 print:hidden">
         <ServingsControl
           servings={currentServings}
@@ -180,10 +189,12 @@ export default function RecipePage() {
           onChange={setServings}
         />
       </div>
+      )}
 
+      {hasIngredients && (
       <section className="mt-6">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="flex flex-1 items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+          <h2 className="flex flex-1 items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark after:h-px after:flex-1 after:bg-paper-line">
             Ingredients
           </h2>
           <div className="print:hidden">
@@ -196,9 +207,11 @@ export default function RecipePage() {
           units={units}
         />
       </section>
+      )}
 
+      {hasSteps && (
       <section className="mt-6">
-        <h2 className="mb-4 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80 after:h-px after:flex-1 after:bg-paper-line">
+        <h2 className="mb-4 flex items-center gap-3 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark after:h-px after:flex-1 after:bg-paper-line">
           Steps
         </h2>
         <ol className="space-y-3">
@@ -214,10 +227,34 @@ export default function RecipePage() {
           ))}
         </ol>
       </section>
+      )}
+
+      {/* Say plainly that this one is not filled in, rather than leaving a
+          page of empty headings and letting somebody conclude the site is
+          broken. The recipe is not lost — it never arrived. */}
+      {isShell && (
+        <section className="mt-6 rounded-2xl border border-dashed border-paper-line bg-paper-card/60 px-6 py-10 text-center">
+          <p className="font-serif italic text-ink-soft">
+            This one hasn't been written down yet.
+          </p>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-ink-faint">
+            The title came across, the recipe didn't
+          </p>
+          {isFamily && (
+            <Link
+              to={`/edit/${recipe.slug}`}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4")}
+            >
+              <Pencil className="h-4 w-4" />
+              Add the recipe
+            </Link>
+          )}
+        </section>
+      )}
 
       {recipe.notes && (
         <section className="mt-8 rounded-xl border border-dashed border-paper-line bg-paper-warm/70 p-4">
-          <h2 className="mb-1.5 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark/80">
+          <h2 className="mb-1.5 font-sans text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark">
             Notes
           </h2>
           <p className="whitespace-pre-wrap font-serif italic leading-relaxed text-ink-soft">
@@ -237,25 +274,29 @@ export default function RecipePage() {
         Jungman family recipes · {window.location.host}/recipe/{recipe.slug}
       </p>
 
-      <button
-        onClick={() => window.print()}
-        className="mt-8 inline-flex items-center gap-1.5 text-sm text-accent underline print:hidden"
-      >
-        <Printer className="h-3.5 w-3.5" />
-        Print this recipe
-      </button>
+      {!isShell && (
+        <button
+          onClick={() => window.print()}
+          className="mt-8 inline-flex items-center gap-1.5 text-sm text-accent-dark underline print:hidden"
+        >
+          <Printer className="h-3.5 w-3.5" />
+          Print this recipe
+        </button>
+      )}
 
       {/* Sits above the phone tab bar; flush with the bottom on larger screens. */}
       {/* Opaque, not frosted: at large serving counts the step text scrolls
           under this bar, and a translucent one let it read through. */}
-      <div className="fixed inset-x-0 bottom-16 z-10 border-t border-paper-line bg-paper p-3 shadow-[0_-4px_16px_-8px_rgba(78,59,33,0.25)] sm:bottom-0">
-        <div className="mx-auto max-w-3xl">
-          <Button size="lg" className="w-full" onClick={() => setCooking(true)}>
-            <ChefHat className="h-5 w-5" />
-            Cook mode
-          </Button>
+      {!isShell && (
+        <div className="fixed inset-x-0 bottom-16 z-10 border-t border-paper-line bg-paper p-3 shadow-[0_-4px_16px_-8px_rgba(78,59,33,0.25)] sm:bottom-0">
+          <div className="mx-auto max-w-3xl">
+            <Button size="lg" className="w-full" onClick={() => setCooking(true)}>
+              <ChefHat className="h-5 w-5" />
+              Cook mode
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </main>
   );
 }

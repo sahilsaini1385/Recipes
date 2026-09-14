@@ -38,7 +38,7 @@ export default function EditRecipe() {
       <main className="mx-auto max-w-md px-4 py-16 text-center">
         <p className="text-ink-soft">
           Editing requires a family sign-in.{" "}
-          <Link to="/signin" className="text-accent underline">
+          <Link to="/signin" className="text-accent-dark underline">
             Sign in
           </Link>
         </p>

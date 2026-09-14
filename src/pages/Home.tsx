@@ -183,7 +183,7 @@ export default function Home() {
           <Heart
             className={cn(
               "h-4 w-4",
-              favoritesOnly ? "fill-white text-white" : "text-accent"
+              favoritesOnly ? "fill-white text-white" : "text-accent-dark"
             )}
           />
           Favorites

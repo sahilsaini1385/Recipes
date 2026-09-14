@@ -22,7 +22,7 @@ export function RecipeCard({ recipe, isFavorite, onToggleFavorite }: Props) {
       <Link to={`/recipe/${recipe.slug}`} className="block">
         {!photo && (
           <div className="flex items-center border-b border-dashed border-paper-line bg-paper-warm/50 px-3.5 py-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-accent-dark/70">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-accent-dark">
               {recipe.category}
             </span>
           </div>
@@ -76,8 +76,8 @@ export function RecipeCard({ recipe, isFavorite, onToggleFavorite }: Props) {
           className={cn(
             "h-5 w-5 transition-all",
             isFavorite
-              ? "scale-110 fill-accent text-accent"
-              : "text-ink-faint/80 group-hover:text-accent/60"
+              ? "scale-110 fill-accent text-accent-dark"
+              : "text-ink-faint/80 group-hover:text-accent-dark/60"
           )}
         />
       </button>
