@@ -17,7 +17,7 @@ import type { Recipe } from "@/lib/types";
 // h-11 (44px) rather than something daintier: these sit in a horizontal
 // scroller on a phone, where a short chip is easy to swipe past by accident.
 const CHIP_BASE =
-  "flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-all active:scale-95";
+  "flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper";
 const CHIP_ON =
   "border-accent-dark/40 bg-accent text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_1px_2px_rgba(78,59,33,0.18)]";
 const CHIP_OFF =
@@ -156,7 +156,7 @@ export default function Home() {
           </p>
           <button
             onClick={clearFrom}
-            className="flex h-9 shrink-0 items-center gap-1 rounded-full border border-accent/25 bg-paper-card px-3 text-[11px] font-medium uppercase tracking-[0.1em] text-accent-dark hover:border-accent/50"
+            className="flex h-9 shrink-0 items-center gap-1 rounded-full border border-accent/25 bg-paper-card px-3 text-[11px] font-medium uppercase tracking-[0.1em] text-accent-dark hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper"
           >
             <X className="h-3 w-3" />
             Clear

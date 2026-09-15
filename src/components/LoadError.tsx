@@ -30,7 +30,7 @@ export function LoadError({
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-4 rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-900 hover:bg-red-50"
+          className="mt-4 rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-900 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper"
         >
           Try again
         </button>

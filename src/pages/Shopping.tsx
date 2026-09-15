@@ -124,7 +124,10 @@ export default function Shopping() {
               key={r.slug}
               className="inline-flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent-soft py-1 pl-3 pr-1 text-sm text-accent-dark"
             >
-              <Link to={`/recipe/${r.slug}`} className="hover:underline">
+              <Link
+                to={`/recipe/${r.slug}`}
+                className="inline-flex min-h-6 items-center hover:underline"
+              >
                 {r.title}
               </Link>
               <button
@@ -230,7 +233,7 @@ export default function Shopping() {
             setPicking(false);
             setQuery("");
           }}
-          className="mt-2 text-sm font-medium text-accent-dark hover:underline"
+          className="mt-2 inline-flex min-h-6 items-center text-sm font-medium text-accent-dark hover:underline"
         >
           Done adding
         </button>

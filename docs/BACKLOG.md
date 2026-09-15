@@ -147,8 +147,12 @@ They are not a separate project.
   `accent-dark` measures 5.37–5.95 against every paper surface, so the fix
   was to stop thinning it rather than to change any token. Nothing else
   failed: no missing labels, no unlabelled controls, no heading-order or
-  landmark problems. Still unexamined: keyboard focus order and how the tree
-  chart reads to a screen reader — axe cannot judge either.
+  landmark problems. **Keyboard walked on 2026-09-15** — every page, every tab
+  stop. Every control is reachable and every one now shows a focus ring;
+  Escape leaves cook mode; standalone controls are at least 24px. Still
+  unexamined: how the tree chart reads aloud to a screen reader, and the fact
+  that its tab order follows the DOM rather than the drawn chart, so focus
+  jumps around the page as you move through the generations.
 - **Performance.** Route splitting done (main chunk 429 KB). Next: the
   remaining 423 KB is React plus the Supabase client, so the wins now are
   image handling for 1.6 and avoiding a fourth copy of the country list.
@@ -193,6 +197,42 @@ They are not a separate project.
 
 Shipped items move here with the date and a one-line note, so the report
 each morning has something to point at.
+
+### 2026-09-15
+
+- **Everything now shows where the keyboard is.** A tab walk over every page
+  found the eleven category filters on the home page — plus the `?from=`
+  Clear button, the cook mode exit and the retry button — taking focus with
+  nothing visible to show for it. You could tab the whole filter row without
+  knowing where you were. They now use the same focus ring every other
+  control in the app already had.
+- **Escape leaves cook mode.** It covers the whole screen, and the only way
+  out on a keyboard was to tab round to the X. It also clears `?cook=1`, so
+  Back still behaves.
+- **Six standalone controls were 20px tall**, under the 24px floor WCAG 2.2
+  asks for: "Show N earlier times", "Print this recipe", "I know the family
+  password", "Use a different email", the shopping list's recipe chips and
+  Places' retry link.
+
+**What a tab walk finds that axe cannot.** Yesterday's audit came back clean
+on labels and structure and said nothing about any of the above, because
+whether a focus style is *visible* and whether a target is big enough to hit
+are not things it checks. Both are what a keyboard or a shaky hand actually
+runs into.
+
+**Still open on the tree chart:** its tab order follows the DOM, not the
+drawn chart, so focus jumps up the page six times as you move through the
+generations. Fixing that means ordering the cards by their laid-out position,
+which is a real change to the layout code rather than a class; and how the
+chart reads aloud to a screen reader is still unexamined.
+
+**Learned, for whoever builds next — this cost an hour.** The filter chips
+carry `transition-all`, so the focus ring *fades in*. Sampling
+`getComputedStyle` immediately after pressing Tab reads `0px` and a
+screenshot taken straight away shows no ring, so a perfectly good focus style
+looks completely absent. It made a working fix look broken twice, and nearly
+had a correct CSS rule deleted as dead. **Wait for the transition before
+measuring or photographing any focus state.**
 
 ### 2026-09-14
 

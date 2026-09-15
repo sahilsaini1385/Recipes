@@ -146,7 +146,7 @@ export default function SignIn() {
           <button
             type="button"
             onClick={() => setLinkSent(false)}
-            className="mt-3 text-sm text-accent-dark underline"
+            className="mt-3 inline-flex min-h-6 items-center text-sm text-accent-dark underline"
           >
             Use a different email
           </button>
@@ -213,7 +213,7 @@ export default function SignIn() {
               setUsePassword(!usePassword);
               setError(null);
             }}
-            className="w-full text-center text-sm text-accent-dark underline"
+            className="min-h-6 w-full text-center text-sm text-accent-dark underline"
           >
             {usePassword
               ? "Email me a link instead"

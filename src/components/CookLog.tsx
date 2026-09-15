@@ -131,7 +131,7 @@ export function CookLog({ recipeId }: { recipeId: string | null }) {
       {hidden > 0 && (
         <button
           onClick={() => setShowAll(true)}
-          className="mb-3 text-sm font-medium text-accent-dark hover:underline"
+          className="mb-3 inline-flex min-h-6 items-center text-sm font-medium text-accent-dark hover:underline"
         >
           Show {hidden} earlier {hidden === 1 ? "time" : "times"}
         </button>

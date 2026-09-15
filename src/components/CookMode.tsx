@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
 import { IngredientLine } from "@/components/IngredientList";
 import { UnitToggle } from "@/components/UnitToggle";
@@ -44,6 +44,17 @@ export function CookMode({
   const toggleIngredient = toggleIn(checkedIngredients, setCheckedIngredients);
   const toggleStep = toggleIn(checkedSteps, setCheckedSteps);
 
+  // Escape leaves. This covers the whole screen, so without it the only way
+  // out on a keyboard was to tab round to the X — and on a laptop propped
+  // open in a kitchen, Escape is the key people reach for.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onExit();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onExit]);
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-paper">
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-paper-line bg-paper/95 px-4 py-3 backdrop-blur">
@@ -60,7 +71,7 @@ export function CookMode({
           <button
             onClick={onExit}
             aria-label="Exit cook mode"
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-paper-warm"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-paper-warm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-paper"
           >
             <X className="h-6 w-6" />
           </button>

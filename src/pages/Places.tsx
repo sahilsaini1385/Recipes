@@ -201,7 +201,7 @@ export default function Places() {
       {error && (
         <div className="mt-10 text-center">
           <p className="text-red-700">Could not load places: {error}</p>
-          <button className="mt-2 text-accent-dark underline" onClick={reload}>
+          <button className="mt-2 inline-flex min-h-6 items-center text-accent-dark underline" onClick={reload}>
             Try again
           </button>
         </div>

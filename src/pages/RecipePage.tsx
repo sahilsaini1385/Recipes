@@ -277,7 +277,7 @@ export default function RecipePage() {
       {!isShell && (
         <button
           onClick={() => window.print()}
-          className="mt-8 inline-flex items-center gap-1.5 text-sm text-accent-dark underline print:hidden"
+          className="mt-8 inline-flex min-h-6 items-center gap-1.5 text-sm text-accent-dark underline print:hidden"
         >
           <Printer className="h-3.5 w-3.5" />
           Print this recipe
