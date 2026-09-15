@@ -3,6 +3,27 @@
 Living document. The daily build routine works from this file, top of a theme
 down, and ticks items off as they ship.
 
+> **Paused on 2026-09-15.** The daily build routine is switched off — disabled,
+> not deleted, so it keeps its history and can be turned back on.
+>
+> Nine builds ran between 7 and 15 September. The reason for stopping is not
+> that the list is finished: it is that almost everything left on it is a
+> feature only a signed-in family member can use, and after nine days there
+> was still **one account of the seven on the allowlist, no cooking entries,
+> no photos, and no recipe edited since 8 September** — the day before the
+> routine started. Five features shipped in a row that nobody opened.
+>
+> The quality half was worth it regardless and is done: a metric conversion
+> that tripled every teaspoon in 32 recipes, a hole letting any stranger
+> create an account, four pages that claimed data was gone when a read simply
+> failed, 33 colour-contrast failures, and a filter row you could tab through
+> blind.
+>
+> **When it restarts, the useful trigger is the family actually using the
+> site.** Then the work is responding to what people hit, rather than guessing
+> from an empty table. Until then, prefer quality and safety work on the 178
+> recipes that already exist over any new feature.
+
 ---
 
 ## What this app is
